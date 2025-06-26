@@ -1,0 +1,60 @@
+[MASTER]
+
+# Specify a configuration file.
+# Generated using `pylint --generate-rcfile > .pylintrc`
+
+# Specify the default module to be checked.
+init-hook='import sys; sys.path.insert(0, "./src")'
+
+# Python code directories to search for imports. Add additional paths as needed.
+load-plugins=pylint.extensions.mccabe
+
+# Number of lines in a file for it to be considered too long.
+max-module-lines=1200
+
+# List of directories or files to exclude from analysis (e.g., tests, migration files, etc.).
+ignore=tests,migrations
+
+# List of directories or files to ignore during recursive directory traversal.
+ignore-patterns=.*_test.py$
+
+# Regular expression matching correct module names.
+module-rgx=[a-z_][a-z0-9_]{2,50}$
+
+# Regular expression which should match function names.
+function-rgx=[a-z_][a-z0-9_]{2,30}$
+
+# A comma-separated list of package or module names for which member attributes should not be checked (useful for compiled modules).
+extension-pkg-whitelist=
+
+[MESSAGES CONTROL]
+
+# Only enable these specific message categories.
+enable=all
+
+# Disable certain messages you want to ignore globally.
+disable=C0111,  # Missing docstring
+        R0903,  # Too few public methods
+        C0200,  # enumerate
+        C0415,  # import-outside-toplevel
+        W0718,  # too general exception
+        C0103,  # Doesn't conform to snake case
+        R0902,  # Too many attributes
+
+[REPORTS]
+
+# Disable the report output by setting output-format to text instead of colorized.
+output-format=colorized
+
+# Score format: disable to prevent overall score display.
+score=no
+
+[FORMAT]
+
+# Maximum number of characters on a single line.
+max-line-length=150
+
+[LOGGING]
+
+# Format string checker
+logging-modules=logging

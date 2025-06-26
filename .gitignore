@@ -1,0 +1,17 @@
+# Ignore node_modules and build output
+/frontend/node_modules
+/frontend/dist
+
+# Ignore envs and Python stuff
+/backend/venv/
+__pycache__/
+*.pyc
+logs/
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE settings
+.vscode/
+.idea/
+.env
