@@ -24,8 +24,7 @@ The source code for [**sneakyofficial.com**](https://sneakyofficial.com) — a p
 * **aiohttp** for async web server + REST API
 * **OAuth2** (Discord integration)
 * Custom scraper tools: `splatscraper.py`, `splatweightscraper.py`, etc.
-* Simple SQLite + context manager for DB operations
-
+* MySQL interactions
 ---
 
 ## 🚀 Project Features
