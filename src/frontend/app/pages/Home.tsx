@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { Helmet } from "react-helmet";
 import TypewriterText from "../components/TypewriterText";
 import SlideInText from "../components/SlideInText";
 import headShot from "../assets/headshot.webp";
@@ -9,9 +10,6 @@ import LifeTimeline from "../components/Timeline";
 import GlassSection from "../components/GlassSection";
 
 const HomePage = () => {
-  useEffect(() => {
-    document.title = "Home | Sneaky's Website";
-  }, []);
 
   const [currentIndex, setCurrentIndex] = useState(0);
   
@@ -48,6 +46,19 @@ const HomePage = () => {
 
   return (
     <PageWrapper>
+      <Helmet>
+        <title>Home | Sneaky's Website - Developer, Musician & Content Creator</title>
+        <meta name="description" content="Welcome to Sneaky's portfolio! Full-stack developer, music producer, and content creator. Explore my projects, music, and YouTube channels." />
+        <meta property="og:title" content="Sneaky's Website - Developer, Musician & Content Creator" />
+        <meta property="og:description" content="Welcome to Sneaky's portfolio! Full-stack developer, music producer, and content creator." />
+        <meta property="og:image" content="/image.png" />
+        <meta property="og:url" content="https://sneakyofficial.com" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Sneaky's Website - Developer, Musician & Content Creator" />
+        <meta name="twitter:description" content="Welcome to Sneaky's portfolio! Full-stack developer, music producer, and content creator." />
+        <meta name="twitter:image" content="/image.png" />
+      </Helmet>
       <div className="w-full overflow-x-hidden">
         <section className="bg-transparent relative">
           <div className="min-h-screen flex flex-col items-center justify-center text-white text-center px-4 sm:px-6 lg:px-8 relative">

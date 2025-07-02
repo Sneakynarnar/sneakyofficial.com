@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 
+const apiUrl = import.meta.env.VITE_API_URL || "https://www.sneakyofficial.com";
+
 function useToken() {
   const [token, setToken] = useState<string | null>(null);
 
@@ -13,7 +15,7 @@ function useToken() {
   }, []);
 
   const refreshToken = async (): Promise<void> => {
-    const response = await fetch("http://127.0.0.1:8080/api/auth/refresh", {
+    const response = await fetch(`${apiUrl}/api/auth/refresh`, {
       method: "POST",
       credentials: "include",
     });

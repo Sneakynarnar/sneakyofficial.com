@@ -11,7 +11,7 @@ class Splatdle():
 
     def __init__(self):
         self.current_weapon = None
-        self.weapon_file = os.path.join(os.getcwd(), "src", "backend", "resources", "weapons.txt")
+        self.weapon_file = os.path.join(os.getcwd(), "src", "backend", "resources", "weapon.txt")
         with open(os.path.join(os.getcwd(), "src", "backend", "resources", "weapons.json"), "r", encoding="utf-8") as F:
             self.weapons = json.loads(F.read())["weapons"]
             self._load_or_pick_weapon()
@@ -78,11 +78,17 @@ class Splatdle():
             today = datetime.datetime.now(timezone.utc).date()
             if last_date != today:
                 await self.reset_played_today_and_streaks()
-                self._load_or_pick_weapon(self)
+                self._load_or_pick_weapon()
                 last_date = today
+
             now = datetime.datetime.now(timezone.utc)
+            # Make next_day timezone-aware
             next_day = datetime.datetime.combine(
-                today + datetime.timedelta(days=1), datetime.time.min)
+                today + datetime.timedelta(days=1),
+                datetime.time.min,
+                tzinfo=timezone.utc  # 👈 THIS IS THE IMPORTANT FIX
+            )
             seconds_until_next_day = (next_day - now).total_seconds()
             if seconds_until_next_day > 0:
+                print(f"waiting {seconds_until_next_day} seconds")
                 await asyncio.sleep(seconds_until_next_day)

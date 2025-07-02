@@ -1,8 +1,9 @@
+import { useState } from "react";
+import { Helmet } from "react-helmet";
 import PageWrapper from "../components/PageWrapper";
 import TitlePage from "../components/TitlePage";
 import sneakyLogo from "../assets/sneaky.jpg"
 import { Music, Play, ExternalLink, Calendar, Clock, Volume2 } from 'lucide-react';
-import { useState, useEffect } from "react";
 import WaveText from "../components/WaveText";
 
 type TeaserVideo = {
@@ -20,9 +21,6 @@ type SoundCloudTrack = {
 
 
 const MusicianPage = () => {
-  useEffect(() => {
-        document.title = "Musician | Sneaky's Website";
-      }, []);
   const [selectedTeaser, setSelectedTeaser] = useState<TeaserVideo | null>(null);
   const teaserVideos: TeaserVideo[] = [
   // {
@@ -45,6 +43,19 @@ const MusicianPage = () => {
 
   return (
     <PageWrapper>
+      <Helmet>
+        <title>Musician | Sneaky's Music - Hip-Hop Producer & Artist</title>
+        <meta name="description" content="Discover Sneaky's music! Listen to hip-hop tracks on SoundCloud, get updates on the upcoming 'Prophecy' EP, and follow the musical journey." />
+        <meta property="og:title" content="Sneaky's Music - Hip-Hop Producer & Artist" />
+        <meta property="og:description" content="Discover Sneaky's music! Listen to hip-hop tracks and get updates on the upcoming 'Prophecy' EP." />
+        <meta property="og:image" content="/image.png" />
+        <meta property="og:url" content="https://sneakyofficial.com/musician" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Sneaky's Music - Hip-Hop Producer & Artist" />
+        <meta name="twitter:description" content="Discover Sneaky's music! Listen to hip-hop tracks and get updates on the upcoming 'Prophecy' EP." />
+        <meta name="twitter:image" content="/image.png" />
+      </Helmet>
       <TitlePage
         imgSrc={sneakyLogo}
         imgAlt="Sneaky Logo"

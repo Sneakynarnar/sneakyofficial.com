@@ -3725,20 +3725,6 @@
       "hint_base_damage": "32"
     },
     {
-      "name": "Charger",
-      "class": "Charger",
-      "game": "Splatoon 2",
-      "image": "",
-      "firerate": 50,
-      "range": 50,
-      "damage": 50,
-      "weight": "Normal",
-      "sub": "",
-      "special": "",
-      "hint_released": "",
-      "hint_base_damage": ""
-    },
-    {
       "name": "Nautilus 79",
       "class": "Splatling",
       "game": "Splatoon 2",
@@ -5658,7 +5644,7 @@
     },
     {
       "name": "Grizzco Blaster",
-      "class": "Blaster",
+      "class": "Shooter",
       "game": "Splatoon 2",
       "image": "grizzco_blaster (Splatoon 2).png",
       "firerate": -1,

@@ -1,0 +1,50 @@
+/*******************************************************
+ *     humans.txt — Respect where it's due             *
+ *     https://www.sneakyofficial.com                 🕶️ *
+ *******************************************************/
+
+/* TEAM ROSTER */
+
+Developer: Nana Adepa Nuamah Adjei (aka Sneaky)
+Discord: sneakynarnar
+GitHub: https://github.com/sneakynarnar
+Portfolio: https://www.sneakyofficial.com
+
+Backend Developer: me  
+Frontend Developer: me  
+UX Designer: me
+QA Tester: me (and Uni Splatoon gang)
+Unit tester: (we don't do that here)
+Manager: also me  
+CTO: me but more tired  
+Coding Interns: Claude.ai and ChatGPT  
+Support Team: 2AM regrets and your mother. (OOOOOOOOH)  
+
+/* SITE DETAILS */
+
+Tech Stack: React, TypeScript, Vite, TailwindCSS, Three.js, React Three Fiber  
+Tools of Choice: VS Code, caffeine, and vibes  
+Color Mode: Dark. Always.  
+Mobile Optimized: Kinda. Try it.  
+Last Update: 2025-06-26  
+Bug Count: unknown. maybe infinite.
+
+/* EASTER EGGS */
+
+- /splatdle – guess the weapon before your sanity collapses  
+- /backgrounds – pretty 3D things. Don't stare too long.  
+- Try inspecting the page. Go on. I dare you.
+
+/* FUN FACTS */
+
+Hours spent coding: yes  
+Hours slept: no
+Number of bugs fixed at 3AM: too many to count  
+
+/* SHOUTOUTS */
+
+Shoutout to me, because I'm awesome
+
+/* PS */
+
+If something breaks, it was a feature. Probably.

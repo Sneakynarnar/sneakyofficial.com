@@ -1,16 +1,68 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <!-- Meta basics -->
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Page title and description -->
     <title>Sneaky's Portfolio Website</title>
+    <meta name="description" content="Sneaky's personal portfolio — a creative blend of development, entertainment, and music. Check out projects, achievements, and 3D web experiments." />
+
+    <!-- Favicons -->
+    <link rel="icon" type="image/png" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <!-- Theme & colors -->
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="color-scheme" content="dark light" />
+
+    <!-- SEO Meta Tags (Don't really work lol not since like 1990) -->
+    <meta name="author" content="Nana Adepa Nuamah Adjei" />
+    <meta name="keywords" content="Sneaky, Portfolio, Software Engineer, Developer, Musician, Entertainer, React, TypeScript, 3D Web, Tailwind, WebGL, Splatdle, Splatoon" />
+
+    <!-- Open Graph (for rich embeds on social media) -->
+    <meta property="og:title" content="Sneaky's Portfolio Website" />
+    <meta property="og:description" content="Explore Sneaky's work across coding, music, and video content creation. Or just play splatdle you do you." />
+    <meta property="og:image" content="/social-preview.jpg" />
+    <meta property="og:url" content="https://www.sneakyofficial.com" />
+    <meta property="og:type" content="website" />
+  
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Sneaky's Portfolio Website" />
+    <meta name="twitter:description" content="I do things" />
+    <meta name="twitter:image" content="/social-preview.jpg" />
+    <meta name="twitter:site" content="@SneakyDev" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="preload" as="script" href="/app/main.tsx" />
+    <link rel="preload" as="font" href="https://fonts.gstatic.com/s/firacode/v21/..." crossorigin />
+
+   <meta http-equiv="Content-Security-Policy" content="
+      default-src 'self';
+      connect-src 'self' https://api.github.com;
+      img-src *;
+      frame-src https://w.soundcloud.com https://player.soundcloud.com https://www.youtube.com;
+      script-src 'self';
+      style-src 'self' 'unsafe-inline' fonts.googleapis.com;
+      font-src 'self' https://fonts.gstatic.com;
+    ">
+        <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta name="referrer" content="no-referrer-when-downgrade" />
   </head>
+
   <body>
     <div id="root"></div>
+    <a href="#main-content" class="sr-only focus:not-sr-only">Skip to main content</a>
     <script type="module" src="/app/main.tsx"></script>
+
   </body>
 </html>

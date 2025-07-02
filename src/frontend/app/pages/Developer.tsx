@@ -1,3 +1,4 @@
+import { Helmet } from "react-helmet";
 import PageWrapper from "../components/PageWrapper";
 import Section from "../components/Section";
 import marineAiLogo from "../assets/marineai.png";
@@ -8,12 +9,8 @@ import TitlePage from "../components/TitlePage";
 import Project from "../components/Project";
 import TypewriterText from "../components/TypewriterText";
 import GitHubCard from "../components/GithubCard";
-import { useEffect } from "react";
 
 const Developer = () => {
-  useEffect(() => {
-    document.title = "Developer | Sneaky's Website";
-  }, []);
 
   const personalProjects = [
     {
@@ -74,6 +71,19 @@ const Developer = () => {
 
   return (
     <PageWrapper>
+      <Helmet>
+        <title>Developer | Sneaky's Portfolio - Full-Stack Projects & Experience</title>
+        <meta name="description" content="Explore Sneaky's development portfolio featuring full-stack projects, C++/Python experience at Marine AI, and open-source contributions. Check out my GitHub projects!" />
+        <meta property="og:title" content="Developer Portfolio | Sneaky's Projects" />
+        <meta property="og:description" content="Explore Sneaky's development portfolio featuring full-stack projects, C++/Python experience, and open-source contributions." />
+        <meta property="og:image" content="/image.png" />
+        <meta property="og:url" content="https://sneakyofficial.com/developer" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Developer Portfolio | Sneaky's Projects" />
+        <meta name="twitter:description" content="Explore Sneaky's development portfolio featuring full-stack projects, C++/Python experience, and open-source contributions." />
+        <meta name="twitter:image" content="/image.png" />
+      </Helmet>
       <main className="w-full overflow-x-hidden">
         <TitlePage
           imgSrc={sneakyLogo}

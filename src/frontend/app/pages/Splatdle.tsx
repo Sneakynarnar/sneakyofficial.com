@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
+import { Helmet } from "react-helmet";
 import axios from "axios";
 import {
   Search,
   Target,
-  Zap,
   Weight,
   Bomb,
   Star,
@@ -19,7 +19,7 @@ import {
   LogOut,
 } from "lucide-react";
 
-const apiUrl = "https://www.sneakyofficial.com";
+const apiUrl = import.meta.env.VITE_API_URL || "https://www.sneakyofficial.com";
 
 type WeaponClass =
   | "Shooter"
@@ -38,9 +38,7 @@ interface Weapon {
   class: WeaponClass;
   game: "Splatoon" | "Splatoon 2" | "Splatoon 3";
   image: string;
-  firerate: number;
   range: number;
-  damage: number;
   weight: "Super Slow" | "Slow" | "Normal" | "Fast";
   sub: string;
   special: string;
@@ -399,25 +397,11 @@ const Splatdle = () => {
         const results = [
           guess.weapon.name == correctWeapon.name && guess.weapon.game == guess.weapon.game ? "🟢" : "🔴",
           guess.weapon.class === correctWeapon.class ? "🟢" : "🔴",
-          guess.weapon.firerate === -1 || correctWeapon.firerate === -1
-            ? "⚫"
-            : Math.abs(guess.weapon.firerate - correctWeapon.firerate) === 0
-            ? "🟢"
-            : Math.abs(guess.weapon.firerate - correctWeapon.firerate) <= 10
-            ? "🟡"
-            : "🔴",
           guess.weapon.range === -1 || correctWeapon.range === -1
             ? "⚫"
             : Math.abs(guess.weapon.range - correctWeapon.range) === 0
             ? "🟢"
             : Math.abs(guess.weapon.range - correctWeapon.range) <= 10
-            ? "🟡"
-            : "🔴",
-          guess.weapon.damage === -1 || correctWeapon.damage === -1
-            ? "⚫"
-            : Math.abs(guess.weapon.damage - correctWeapon.damage) === 0
-            ? "🟢"
-            : Math.abs(guess.weapon.damage - correctWeapon.damage) <= 10
             ? "🟡"
             : "🔴",
           guess.weapon.weight === correctWeapon.weight ? "🟢" : "🔴",
@@ -459,7 +443,7 @@ const Splatdle = () => {
     let data: GameData;
 
     try {
-      const response = await axios.get("https://www.sneakyofficial.com/api/splatdle");
+      const response = await axios.get(`${apiUrl}/api/splatdle`);
       data = response.data;
     } catch (error) {
       data = { weapons: [], answer: "" };
@@ -825,6 +809,19 @@ const Splatdle = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 relative">
+      <Helmet>
+        <title>Splatdle - Guess the Splatoon Weapon | Sneaky's Games</title>
+        <meta name="description" content="Test your Splatoon knowledge with Splatdle! Guess the weapon in this fun daily puzzle game. Play now and see how many tries it takes you!" />
+        <meta property="og:title" content="Splatdle - Guess the Splatoon Weapon" />
+        <meta property="og:description" content="Test your Splatoon knowledge with Splatdle! Guess the weapon in this fun daily puzzle game." />
+        <meta property="og:image" content="/splatdle.png" />
+        <meta property="og:url" content="https://sneakyofficial.com/splatdle" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Splatdle - Guess the Splatoon Weapon" />
+        <meta name="twitter:description" content="Test your Splatoon knowledge with Splatdle! Guess the weapon in this fun daily puzzle game." />
+        <meta name="twitter:image" content="/splatdle.png" />
+      </Helmet>
       {/* Fixed Background Image */}
       <div className="fixed inset-0 pointer-events-none z-0">
         <div
@@ -1172,22 +1169,10 @@ const Splatdle = () => {
                     <span>Class</span>
                   </div>
                 </Tooltip>
-                <Tooltip content="Rate of Fire (shots per second)">
-                  <div className="flex items-center justify-center gap-1">
-                    <Zap className="h-4 w-4" />
-                    <span>Fire Rate</span>
-                  </div>
-                </Tooltip>
                 <Tooltip content="Maximum effective range">
                   <div className="flex items-center justify-center gap-1">
                     <Target className="h-4 w-4" />
                     <span>Range</span>
-                  </div>
-                </Tooltip>
-                <Tooltip content="Damage per shot">
-                  <div className="flex items-center justify-center gap-1">
-                    <Star className="h-4 w-4" />
-                    <span>Damage</span>
                   </div>
                 </Tooltip>
                 <Tooltip content="Movement speed class">
@@ -1221,7 +1206,7 @@ const Splatdle = () => {
           {/* Mobile Headers */}
           {guesses.length > 0 && (
             <div className="lg:hidden bg-slate-800/30 backdrop-blur-xl border border-slate-700/30 rounded-2xl p-3 mb-4">
-              <div className="grid grid-cols-5 gap-1 text-center text-xs font-bold text-slate-300">
+              <div className="grid grid-cols-3 gap-1 text-center text-xs font-bold text-slate-300">
                 <div className="flex flex-col items-center justify-center gap-1">
                   <Image className="h-3 w-3" />
                   <span>Img</span>
@@ -1235,7 +1220,7 @@ const Splatdle = () => {
                   <span>Class</span>
                 </div>
                 <div className="flex flex-col items-center justify-center gap-1">
-                  <Zap className="h-3 w-3" />
+                  <Target className="h-3 w-3" />
                   <span>Stats</span>
                 </div>
                 <div className="flex flex-col items-center justify-center gap-1">
@@ -1249,13 +1234,7 @@ const Splatdle = () => {
                 <div className="text-xs text-slate-400 mb-2 font-semibold">Stats Legend:</div>
                 <div className="grid grid-cols-2 gap-2 text-xs text-slate-400">
                   <div>
-                    <span className="font-medium">FR:</span> Fire Rate
-                  </div>
-                  <div>
                     <span className="font-medium">RG:</span> Range
-                  </div>
-                  <div>
-                    <span className="font-medium">DMG:</span> Damage
                   </div>
                   <div>
                     <span className="font-medium">Weight:</span> Movement Speed
@@ -1322,27 +1301,10 @@ const Splatdle = () => {
                     </div>
                   </FlipCard>
 
-                  <FlipCard
-                    isAnimating={animatingGuess === index}
-                    delay={600}
-                    shouldStayFlipped={animatingGuess !== index}
-                  >
-                    <div
-                      className={`${getComparisonClass(
-                        guess.weapon.firerate,
-                        correctWeapon?.firerate
-                      )} text-white rounded-xl h-full w-full flex flex-col items-center justify-center font-bold px-2`}
-                    >
-                      <div className="text-lg">{formatStat(guess.weapon.firerate)}</div>
-                      <div className="text-xs opacity-75">
-                        {getArrowIcon(guess.weapon.firerate, correctWeapon?.firerate)}
-                      </div>
-                    </div>
-                  </FlipCard>
 
                   <FlipCard
                     isAnimating={animatingGuess === index}
-                    delay={800}
+                    delay={600}
                     shouldStayFlipped={animatingGuess !== index}
                   >
                     <div
@@ -1358,27 +1320,10 @@ const Splatdle = () => {
                     </div>
                   </FlipCard>
 
-                  <FlipCard
-                    isAnimating={animatingGuess === index}
-                    delay={1000}
-                    shouldStayFlipped={animatingGuess !== index}
-                  >
-                    <div
-                      className={`${getComparisonClass(
-                        guess.weapon.damage,
-                        correctWeapon?.damage
-                      )} text-white rounded-xl h-full w-full flex flex-col items-center justify-center font-bold px-2`}
-                    >
-                      <div className="text-lg">{formatStat(guess.weapon.damage)}</div>
-                      <div className="text-xs opacity-75">
-                        {getArrowIcon(guess.weapon.damage, correctWeapon?.damage)}
-                      </div>
-                    </div>
-                  </FlipCard>
 
                   <FlipCard
                     isAnimating={animatingGuess === index}
-                    delay={1200}
+                    delay={800}
                     shouldStayFlipped={animatingGuess !== index}
                   >
                     <div
@@ -1393,7 +1338,7 @@ const Splatdle = () => {
 
                   <FlipCard
                     isAnimating={animatingGuess === index}
-                    delay={1400}
+                    delay={1000}
                     shouldStayFlipped={animatingGuess !== index}
                   >
                     <div
@@ -1408,7 +1353,7 @@ const Splatdle = () => {
 
                   <FlipCard
                     isAnimating={animatingGuess === index}
-                    delay={1600}
+                    delay={1200}
                     shouldStayFlipped={animatingGuess !== index}
                   >
                     <div
@@ -1423,7 +1368,7 @@ const Splatdle = () => {
 
                   <FlipCard
                     isAnimating={animatingGuess === index}
-                    delay={1800}
+                    delay={1400}
                     shouldStayFlipped={animatingGuess !== index}
                   >
                     <div
@@ -1487,29 +1432,11 @@ const Splatdle = () => {
                   </div>
 
                   {/* Second Row - Stats */}
-                  <div className="grid grid-cols-5 gap-1 mb-2">
-                    <FlipCard
-                      isAnimating={animatingGuess === index}
-                      delay={600}
-                      shouldStayFlipped={animatingGuess !== index}
-                    >
-                      <div
-                        className={`${getComparisonClass(
-                          guess.weapon.firerate,
-                          correctWeapon?.firerate
-                        )} text-white rounded-xl h-full w-full flex flex-col items-center justify-center font-bold px-1`}
-                      >
-                        <div className="text-xs">FR</div>
-                        <div className="text-sm">{formatStat(guess.weapon.firerate)}</div>
-                        <div className="text-xs opacity-75">
-                          {getArrowIcon(guess.weapon.firerate, correctWeapon?.firerate)}
-                        </div>
-                      </div>
-                    </FlipCard>
+                  <div className="grid grid-cols-3 gap-1 mb-2">
 
                     <FlipCard
                       isAnimating={animatingGuess === index}
-                      delay={800}
+                      delay={600}
                       shouldStayFlipped={animatingGuess !== index}
                     >
                       <div
@@ -1526,28 +1453,10 @@ const Splatdle = () => {
                       </div>
                     </FlipCard>
 
-                    <FlipCard
-                      isAnimating={animatingGuess === index}
-                      delay={1000}
-                      shouldStayFlipped={animatingGuess !== index}
-                    >
-                      <div
-                        className={`${getComparisonClass(
-                          guess.weapon.damage,
-                          correctWeapon?.damage
-                        )} text-white rounded-xl h-full w-full flex flex-col items-center justify-center font-bold px-1`}
-                      >
-                        <div className="text-xs">DMG</div>
-                        <div className="text-sm">{formatStat(guess.weapon.damage)}</div>
-                        <div className="text-xs opacity-75">
-                          {getArrowIcon(guess.weapon.damage, correctWeapon?.damage)}
-                        </div>
-                      </div>
-                    </FlipCard>
 
                     <FlipCard
                       isAnimating={animatingGuess === index}
-                      delay={1200}
+                      delay={800}
                       shouldStayFlipped={animatingGuess !== index}
                     >
                       <div
@@ -1565,7 +1474,7 @@ const Splatdle = () => {
 
                     <FlipCard
                       isAnimating={animatingGuess === index}
-                      delay={1800}
+                      delay={1000}
                       shouldStayFlipped={animatingGuess !== index}
                     >
                       <div
@@ -1590,7 +1499,7 @@ const Splatdle = () => {
                   <div className="grid grid-cols-2 gap-2">
                     <FlipCard
                       isAnimating={animatingGuess === index}
-                      delay={1400}
+                      delay={1200}
                       shouldStayFlipped={animatingGuess !== index}
                     >
                       <div
@@ -1610,7 +1519,7 @@ const Splatdle = () => {
 
                     <FlipCard
                       isAnimating={animatingGuess === index}
-                      delay={1600}
+                      delay={1400}
                       shouldStayFlipped={animatingGuess !== index}
                     >
                       <div

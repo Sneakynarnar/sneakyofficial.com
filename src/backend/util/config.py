@@ -38,6 +38,7 @@ class Config():
         self.token: str = None
         self.secured = False
         self.port = 8080
+        self.discord_verify = ""
         self.assign_values()
 
     def assign_values(self):
@@ -53,7 +54,7 @@ class Config():
         self.mysql_host = getenv("MYSQL_HOST")
         self.secured = getenv("SECURED") == "1"
         self.port = getenv("PORT")
-
+        self.discord_verify = getenv("DISCORD_VERIFY")
 
 def setup_logging():
     if not os.path.exists(LOG_DIR):
@@ -77,4 +78,5 @@ def setup_logging():
     logging.getLogger('aiomysql').setLevel(logging.INFO)
 
 
+load_dotenv()
 global_config = Config()

@@ -1,0 +1,7 @@
+# robots.txt for https://www.sneakyofficial.com
+
+User-agent: *
+Disallow: /private/
+Allow: /
+
+Sitemap: https://www.sneakyofficial.com/sitemap.xml

@@ -46,9 +46,14 @@ class WebServer:
         else:
             raise web.HTTPNotFound()
 
+    async def handle_discord_verification(self, request):
+        print("Verfying using: ", global_config.discord_verify)
+        return web.Response(text=global_config.discord_verify)
+
     def _add_routes(self):
         # API Routes
 
+        self.app.router.add_get("/.well-known/discord", self.handle_discord_verification)
         self.app.router.add_post(
             "/api/auth/discord/refresh-token", self.discord_token_handler.refresh_token)
         self.app.router.add_get(
@@ -59,7 +64,6 @@ class WebServer:
             "/api/auth/discord/logout", self.discord_token_handler.logout_platform)
         self.app.router.add_get(
             '/api/auth/callback', self.discord_token_handler.handle_callback)
-
         self.app.router.add_get(
             "/api/splatdle", self.sneaky_api.serve_splatdle)
         self.app.router.add_post(
@@ -75,7 +79,7 @@ class WebServer:
         self.app.router.add_static(
             "/images", path=images_dir, show_index=True)
 
-        self.app.router.add_get("/{filename:favicon\\.ico|.*\\.jpg|.*\\.png|.*\\.css|.*\\.js}",
+        self.app.router.add_get("/{filename:favicon\\.ico|.*\\.jpg|.*\\.png|.*\\.css|.*\\.js|.*\\.txt|.*\\.xml}",
                                 self.serve_static_file)
         # Serve index.html for SPA routes
         self.app.router.add_get("/{tail:.*}", self.serve_index)
@@ -103,13 +107,14 @@ class WebServer:
         site = web.TCPSite(runner, '0.0.0.0',
                            global_config.port, ssl_context=None)
         await site.start()
-        print("running....")
+        logger.debug("Running webserver....")
         if global_config.secured:
             logger.info(
                 "Running server webserver on port: %s with SSL", global_config.port)
         else:
             logger.info("Running server webserver on port: %s",
                         global_config.port)
+        await self.sneaky_api.splatdle.run()
 
     async def close(self):
         await self.discord_token_handler.close()

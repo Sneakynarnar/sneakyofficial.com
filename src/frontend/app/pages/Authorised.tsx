@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Helmet } from "react-helmet";
 import { CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 
-const apiUrl = "https://www.sneakyofficial.com";
+const apiUrl = import.meta.env.VITE_API_URL || "https://www.sneakyofficial.com";
 
 export default function AuthCallback() {
   const [fadeIn, setFadeIn] = useState(false);
@@ -84,6 +85,19 @@ export default function AuthCallback() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <Helmet>
+        <title>Authentication | Splatdle - Logging You In</title>
+        <meta name="description" content="Authenticating your Discord login for Splatdle. Please wait while we verify your credentials." />
+        <meta property="og:title" content="Authentication | Splatdle" />
+        <meta property="og:description" content="Authenticating your Discord login for Splatdle." />
+        <meta property="og:image" content="/image.png" />
+        <meta property="og:url" content="https://sneakyofficial.com/authorised" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Authentication | Splatdle" />
+        <meta name="twitter:description" content="Authenticating your Discord login for Splatdle." />
+        <meta name="twitter:image" content="/image.png" />
+      </Helmet>
       <div className="max-w-md w-full">
         <div
           className={`bg-white rounded-2xl shadow-xl p-8 text-center transition-opacity duration-500 ${

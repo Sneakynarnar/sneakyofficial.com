@@ -1,9 +1,9 @@
-import React from "react";
+import React, { useState } from "react";
+import { Helmet } from "react-helmet";
 import PageWrapper from "../components/PageWrapper";
 import sneakyLogo from "../assets/sneaky.jpg";
 import TitlePage from "../components/TitlePage";
 import SlideInText from "../components/SlideInText";
-import { useState, useEffect } from "react";
 import { Youtube, X, Gamepad2, Play, ExternalLink } from 'lucide-react';
 
 type SocialAccount = {
@@ -28,9 +28,6 @@ type FeaturedVideo = {
 
 const Entertainer = () => {
   const [selectedVideo, setSelectedVideo] = useState<FeaturedVideo | null>(null);
-  useEffect(() => {
-    document.title = "Social | Sneaky's Website";
-  }, []);
   const socialPlatforms: SocialPlatform[]= [
     {
       category: "YouTube",
@@ -144,6 +141,19 @@ const Entertainer = () => {
   ];
  return (
     <PageWrapper>
+      <Helmet>
+        <title>Social & Content | Sneaky's Channels - Anime Analysis & Gaming</title>
+        <meta name="description" content="Follow Sneaky's content! Anime analysis on Guy On Nightmode, Splatoon gaming content, and social media updates across YouTube, TikTok, and more." />
+        <meta property="og:title" content="Sneaky's Content - Anime Analysis & Gaming" />
+        <meta property="og:description" content="Follow Sneaky's content! Anime analysis, gaming videos, and social media updates across multiple platforms." />
+        <meta property="og:image" content="/image.png" />
+        <meta property="og:url" content="https://sneakyofficial.com/entertainer" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Sneaky's Content - Anime Analysis & Gaming" />
+        <meta name="twitter:description" content="Follow Sneaky's content! Anime analysis, gaming videos, and social media updates across multiple platforms." />
+        <meta name="twitter:image" content="/image.png" />
+      </Helmet>
       <TitlePage
             imgSrc={sneakyLogo}
             imgAlt="Sneaky Logo"
