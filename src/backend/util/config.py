@@ -1,22 +1,8 @@
 from os import getenv
 from dotenv import load_dotenv
+from typing import Optional
 
 
-"""
-Module for configuring logging.
-This module provides functionality for configuring the logging system in the application.
-It sets up a logger with a specified log level and format, and adds a timed rotating file handler
-to log messages to a file that rotates daily.
-Attributes:
-    log_filename (str): The filename pattern for the log files.
-    logger (logging.Logger): The logger object for the module.
-Example:
-    To use this module, import it and configure the logging system:
-    ```python
-    logging_config.logger.info("Logging system configured.")
-    ```
-import logging
-"""
 import os
 from logging.handlers import TimedRotatingFileHandler
 from datetime import datetime
@@ -25,26 +11,55 @@ import logging
 LOG_DIR = "logs"
 
 
-class Config():
+class Config:
+    """Configuration management class.
 
-    def __init__(self):
-        self.client_id: str = None
-        self.client_secret: str = None
-        self.redirect_uri: str = None
-        self.mysql_database: str = None
-        self.mysql_user: str = None
-        self.mysql_pass: str = None
-        self.mysql_host: str = None
-        self.token: str = None
-        self.secured = False
-        self.port = 8080
-        self.discord_verify = ""
+    Handles loading and managing application configuration from environment
+    variables including Discord credentials, database settings, and server options.
+
+    Attributes:
+        client_id: Discord application client ID.
+        client_secret: Discord application client secret.
+        redirect_uri: OAuth redirect URI.
+        mysql_database: MySQL database name.
+        mysql_user: MySQL username.
+        mysql_pass: MySQL password.
+        mysql_host: MySQL host address.
+        token: Discord bot token.
+        secured: Whether to use HTTPS/SSL.
+        discord_token: Discord bot token (duplicate of token).
+        port: Server port number.
+        discord_verify: Discord verification token.
+        error_log_channel: Channel ID for error logging.
+        theme_colour: Default theme color for embeds.
+    """
+
+    def __init__(self) -> None:
+        """Initialize configuration with default values and load from environment.
+        """
+        self.client_id: Optional[str] = None
+        self.client_secret: Optional[str] = None
+        self.redirect_uri: Optional[str] = None
+        self.mysql_database: Optional[str] = None
+        self.mysql_user: Optional[str] = None
+        self.mysql_pass: Optional[str] = None
+        self.mysql_host: Optional[str] = None
+        self.token: Optional[str] = None
+        self.secured: bool = False
+        self.discord_token: Optional[str] = None
+        self.port: int = 8080
+        self.discord_verify: str = ""
+        self.error_log_channel: Optional[str] = None
+        self.theme_colour: int = 0x7e32f0
         self.assign_values()
 
-    def assign_values(self):
+    def assign_values(self) -> None:
+        """Load configuration values from environment variables.
+        """
 
         load_dotenv()
         self.client_id = getenv("DISCORD_CLIENT_ID")
+        self.discord_token = getenv("DISCORD_TOKEN")
         self.client_secret = getenv("DISCORD_CLIENT_SECRET")
         self.redirect_uri = getenv("DISCORD_REDIRECT_URI")
         self.token = getenv("DISCORD_TOKEN")
@@ -55,8 +70,15 @@ class Config():
         self.secured = getenv("SECURED") == "1"
         self.port = getenv("PORT")
         self.discord_verify = getenv("DISCORD_VERIFY")
+        self.error_log_channel = getenv("ERROR_LOG_CHANNEL")
 
-def setup_logging():
+
+def setup_logging() -> None:
+    """Set up application logging configuration.
+
+    Configures logging with file rotation, console output, and
+    appropriate log levels for different components.
+    """
     if not os.path.exists(LOG_DIR):
         os.makedirs(LOG_DIR)
 
@@ -71,7 +93,6 @@ def setup_logging():
         ]
     )
 
-    # asyncio.get_event_loop().set_debug(True)
     logging.getLogger('interactions').setLevel(logging.WARNING)
     logging.getLogger('asyncio').setLevel(logging.WARNING)
     logging.getLogger('aiohttp.access').setLevel(logging.INFO)

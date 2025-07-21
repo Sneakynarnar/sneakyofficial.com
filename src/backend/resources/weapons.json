@@ -302,7 +302,7 @@
       "firerate": 75,
       "range": 42,
       "damage": 22,
-      "weight": "Normal",
+      "weight": "Fast",
       "sub": "Toxic Mist",
       "special": "Ink Storm",
       "hint_released": "Splatlands Collection (Splatoon 3 - 10.0.0)",
@@ -428,7 +428,7 @@
       "firerate": 90,
       "range": 35,
       "damage": 10,
-      "weight": "Normal",
+      "weight": "Fast",
       "sub": "Burst Bomb",
       "special": "Splattercolor Screen",
       "hint_released": "Splatlands Collection (Splatoon 3 - 10.0.0)",
@@ -1202,7 +1202,7 @@
       "sub": "Toxic Mist",
       "special": "Ink Storm",
       "hint_released": "Fresh Season 2023 (Splatoon 3 - 3.0.0)",
-      "hint_base_damage": ""
+      "hint_base_damage": "32"
     },
     {
       "name": "Jet Squelcher COB-R",
@@ -1216,7 +1216,7 @@
       "sub": "Burst Bomb",
       "special": "Triple Splashdown",
       "hint_released": "Splatlands Collection (Splatoon 3 - 10.0.0)",
-      "hint_base_damage": ""
+      "hint_base_damage": "32"
     },
     {
       "name": "Splattershot Nova",
@@ -1244,7 +1244,7 @@
       "sub": "Ink Mine",
       "special": "Inkjet",
       "hint_released": "Sizzle Season 2023 (Splatoon 3 - 4.0.0)",
-      "hint_base_damage": ""
+      "hint_base_damage": "24"
     },
     {
       "name": "L-3 Nozzlenose",
@@ -1252,12 +1252,12 @@
       "game": "Splatoon",
       "image": "l_3_nozzlenose (Splatoon).png",
       "firerate": 50,
-      "range": 50,
+      "range": 60,
       "damage": 50,
       "weight": "Normal",
       "sub": "Disruptor",
       "special": "Killer Wail",
-      "hint_released": "9",
+      "hint_released": "17 June 2015",
       "hint_base_damage": "29"
     },
     {
@@ -1266,12 +1266,12 @@
       "game": "Splatoon 2",
       "image": "l_3_nozzlenose (Splatoon 2).png",
       "firerate": 50,
-      "range": 50,
+      "range": 62,
       "damage": 50,
       "weight": "Normal",
       "sub": "Curling Bomb",
       "special": "Baller",
-      "hint_released": "18",
+      "hint_released": "Initial Release (1.0.0)",
       "hint_base_damage": "29"
     },
     {
@@ -1294,12 +1294,12 @@
       "game": "Splatoon",
       "image": "l_3_nozzlenose_d (Splatoon).png",
       "firerate": 50,
-      "range": 50,
+      "range": 60,
       "damage": 50,
       "weight": "Normal",
       "sub": "Burst Bomb",
       "special": "Kraken",
-      "hint_released": "13",
+      "hint_released": "6 January 2018",
       "hint_base_damage": "29"
     },
     {
@@ -1308,12 +1308,12 @@
       "game": "Splatoon 2",
       "image": "l_3_nozzlenose_d (Splatoon 2).png",
       "firerate": 50,
-      "range": 50,
+      "range": 62,
       "damage": 50,
       "weight": "Normal",
       "sub": "Burst Bomb",
       "special": "Inkjet",
-      "hint_released": "23",
+      "hint_released": "17 March 2018",
       "hint_base_damage": "29"
     },
     {
@@ -1328,7 +1328,7 @@
       "sub": "Burst Bomb",
       "special": "Ultra Stamp",
       "hint_released": "Fresh Season 2023 (Splatoon 3 - 3.0.0)",
-      "hint_base_damage": ""
+      "hint_base_damage": "29"
     },
     {
       "name": "Kensa L-3 Nozzlenose",
@@ -1336,12 +1336,12 @@
       "game": "Splatoon 2",
       "image": "kensa_l_3_nozzlenose (Splatoon 2).png",
       "firerate": 50,
-      "range": 50,
+      "range": 62,
       "damage": 50,
       "weight": "Normal",
       "sub": "Splash Wall",
       "special": "Ultra Stamp",
-      "hint_released": "27",
+      "hint_released": "5 December 2018 (4.3.0 - Splatoon 2)",
       "hint_base_damage": "29"
     },
     {
@@ -1356,20 +1356,20 @@
       "sub": "Splat Bomb",
       "special": "Inkjet",
       "hint_released": "Splatlands Collection (Splatoon 3 - 10.0.0)",
-      "hint_base_damage": ""
+      "hint_base_damage": "44"
     },
     {
       "name": "H-3 Nozzlenose",
       "class": "Shooter",
       "game": "Splatoon",
       "image": "h_3_nozzlenose (Splatoon).png",
-      "firerate": 50,
-      "range": 50,
+      "firerate": 68,
+      "range": 68,
       "damage": 50,
       "weight": "Normal",
       "sub": "Suction Bomb",
       "special": "Echolocator",
-      "hint_released": "10",
+      "hint_released": "12 September 2015",
       "hint_base_damage": "41"
     },
     {
@@ -1377,13 +1377,13 @@
       "class": "Shooter",
       "game": "Splatoon 2",
       "image": "h_3_nozzlenose (Splatoon 2).png",
-      "firerate": 50,
-      "range": 50,
+      "firerate": 70,
+      "range": 70,
       "damage": 50,
       "weight": "Normal",
       "sub": "Point Sensor",
       "special": "Tenta Missiles",
-      "hint_released": "29",
+      "hint_released": "Initial Release (1.0.0)",
       "hint_base_damage": "41"
     },
     {
@@ -1391,7 +1391,7 @@
       "class": "Shooter",
       "game": "Splatoon 3",
       "image": "h_3_nozzlenose (Splatoon 3).png",
-      "firerate": 30,
+      "firerate": 70,
       "range": 70,
       "damage": 58,
       "weight": "Normal",
@@ -1406,7 +1406,7 @@
       "game": "Splatoon",
       "image": "h_3_nozzlenose_d (Splatoon).png",
       "firerate": 50,
-      "range": 50,
+      "range": 70,
       "damage": 50,
       "weight": "Normal",
       "sub": "Point Sensor",
@@ -1419,8 +1419,8 @@
       "class": "Shooter",
       "game": "Splatoon 2",
       "image": "h_3_nozzlenose_d (Splatoon 2).png",
-      "firerate": 50,
-      "range": 50,
+      "firerate": 70,
+      "range": 70,
       "damage": 50,
       "weight": "Normal",
       "sub": "Suction Bomb",
@@ -1440,15 +1440,15 @@
       "sub": "Splash Wall",
       "special": "Big Bubbler",
       "hint_released": "Sizzle Season 2023 (Splatoon 3 - 4.0.0)",
-      "hint_base_damage": ""
+      "hint_base_damage": "44"
     },
     {
       "name": "Cherry H-3 Nozzlenose",
       "class": "Shooter",
       "game": "Splatoon",
       "image": "cherry_h_3_nozzlenose (Splatoon).png",
-      "firerate": 50,
-      "range": 50,
+      "firerate": 70,
+      "range": 70,
       "damage": 50,
       "weight": "Normal",
       "sub": "Splash Wall",
@@ -1461,8 +1461,8 @@
       "class": "Shooter",
       "game": "Splatoon 2",
       "image": "cherry_h_3_nozzlenose (Splatoon 2).png",
-      "firerate": 50,
-      "range": 50,
+      "firerate": 70,
+      "range": 70,
       "damage": 50,
       "weight": "Normal",
       "sub": "Splash Wall",
@@ -1482,7 +1482,7 @@
       "sub": "Suction Bomb",
       "special": "Triple Inkstrike",
       "hint_released": "Splatlands Collection (Splatoon 3 - 10.0.0)",
-      "hint_base_damage": ""
+      "hint_base_damage": "44"
     },
     {
       "name": "Squeezer",
@@ -1490,13 +1490,13 @@
       "game": "Splatoon 2",
       "image": "squeezer (Splatoon 2).png",
       "firerate": 50,
-      "range": 50,
+      "range": 77,
       "damage": 50,
       "weight": "Normal",
       "sub": "Splash Wall",
       "special": "Sting Ray",
       "hint_released": "16",
-      "hint_base_damage": "38 (Press {{button|ZR|Switch"
+      "hint_base_damage": "38 (Press) / 30 (Hold)"
     },
     {
       "name": "Squeezer",
@@ -1518,13 +1518,13 @@
       "game": "Splatoon 2",
       "image": "foil_squeezer (Splatoon 2).png",
       "firerate": 50,
-      "range": 50,
+      "range": 77,
       "damage": 50,
       "weight": "Normal",
       "sub": "Splat Bomb",
       "special": "Bubble Blower",
       "hint_released": "25",
-      "hint_base_damage": "38 (Press {{button|ZR|switch"
+      "hint_base_damage": "38 (Press) / 30 (Hold)"
     },
     {
       "name": "Foil Squeezer",
@@ -1538,7 +1538,7 @@
       "sub": "Autobomb",
       "special": "Splattercolor Screen",
       "hint_released": "Chill Season 2023 (Splatoon 3 - 6.0.0)",
-      "hint_base_damage": ""
+      "hint_base_damage": "38 (Press) / 30 (Hold)"
     },
     {
       "name": "Carbon Roller",
@@ -1632,7 +1632,7 @@
       "firerate": 50,
       "range": 20,
       "damage": 50,
-      "weight": "Normal",
+      "weight": "Fast",
       "sub": "Fizzy Bomb",
       "special": "Super Chump",
       "hint_released": "Splatlands Collection (Splatoon 3 - 10.0.0)",
@@ -1912,7 +1912,7 @@
       "firerate": 50,
       "range": 76,
       "damage": 50,
-      "weight": "Normal",
+      "weight": "Slow",
       "sub": "Point Sensor",
       "special": "Killer Wail 5.1",
       "hint_released": "Splatlands Collection (Splatoon 3 - 10.0.0)",
@@ -3018,7 +3018,7 @@
       "firerate": 50,
       "range": 31,
       "damage": 75,
-      "weight": "Normal",
+      "weight": "Fast",
       "sub": "Splat Bomb",
       "special": "Splattercolor Screen",
       "hint_released": "Splatlands Collection (Splatoon 3 - 10.0.0)",
@@ -3634,7 +3634,7 @@
       "firerate": 50,
       "range": 85,
       "damage": 50,
-      "weight": "Normal",
+      "weight": "Slow",
       "sub": "Sprinkler",
       "special": "Big Bubbler",
       "hint_released": "Splatlands Collection (Splatoon 3 - 10.0.0)",
@@ -3772,7 +3772,7 @@
       "game": "Splatoon 3",
       "image": "heavy_edit_splatling_nouveau (Splatoon 3).png",
       "firerate": 50,
-      "range": 50,
+      "range": 70,
       "damage": 50,
       "weight": "Normal",
       "sub": "Splat Bomb",
@@ -3858,7 +3858,7 @@
       "firerate": 50,
       "range": 24,
       "damage": 47,
-      "weight": "Normal",
+      "weight": "Fast",
       "sub": "Splat Bomb",
       "special": "Killer Wail 5.1",
       "hint_released": "Splatlands Collection (Splatoon 3 - 10.0.0)",
@@ -4192,7 +4192,7 @@
       "game": "Splatoon 3",
       "image": "custom_douser_dualies_ff (Splatoon 3).png",
       "firerate": 50,
-      "range": 50,
+      "range": 78,
       "damage": 50,
       "weight": "Normal",
       "sub": "Burst Bomb",
@@ -4362,7 +4362,7 @@
       "firerate": 50,
       "range": 62,
       "damage": 85,
-      "weight": "Normal",
+      "weight": "Slow",
       "sub": "Toxic Mist",
       "special": "Super Chump",
       "hint_released": "Splatlands Collection (Splatoon 3 - 10.0.0)",
@@ -4446,7 +4446,7 @@
       "firerate": 50,
       "range": 50,
       "damage": 30,
-      "weight": "Normal",
+      "weight": "Fast",
       "sub": "Curling Bomb",
       "special": "Killer Wail 5.1",
       "hint_released": "Splatlands Collection (Splatoon 3 - 10.0.0)",
@@ -4472,7 +4472,7 @@
       "game": "Splatoon 3",
       "image": "recycled_brella_24_mk_ii (Splatoon 3).png",
       "firerate": 50,
-      "range": 50,
+      "range": 56,
       "damage": 50,
       "weight": "Normal",
       "sub": "Toxic Mist",
@@ -5482,7 +5482,7 @@
       "firerate": 50,
       "range": 60,
       "damage": 50,
-      "weight": "Normal",
+      "weight": "Fast",
       "sub": "Torpedo",
       "special": "Booyah Bomb",
       "hint_released": "Splatlands Collection (Splatoon 3 - 10.0.0)",
@@ -5608,7 +5608,7 @@
       "firerate": 50,
       "range": 58,
       "damage": 29,
-      "weight": "Normal",
+      "weight": "Fast",
       "sub": "Curling Bomb",
       "special": "Trizooka",
       "hint_released": "Splatlands Collection (Splatoon 3 - 10.0.0)",
@@ -5662,7 +5662,7 @@
       "game": "Splatoon 3",
       "image": "grizzco_blaster (Splatoon 3).png",
       "firerate": 50,
-      "range": 50,
+      "range": -1,
       "damage": 50,
       "weight": "Normal",
       "sub": "N/A",
@@ -5821,7 +5821,8 @@
       "weight": "Super Slow",
       "sub": "N/A",
       "special": "N/A",
-      "hint_released": "14 August 2015"
+      "hint_released": "14 August 2015",
+      "hint_base_damage": ""
     }
   ]
 }

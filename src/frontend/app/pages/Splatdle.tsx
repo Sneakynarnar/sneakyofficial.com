@@ -212,6 +212,17 @@ const Splatdle = () => {
   const [showWinPopup, setShowWinPopup] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [statsPosted, setStatsPosted] = useState(false);
+  const [userStats, setUserStats] = useState<{
+    streak: number;
+    totalGames: number;
+    averageGuesses: number;
+    globalAverage: number;
+    isNewStreak: boolean;
+    guessCount: number;
+    personalPerformance: "above" | "below" | "equal";
+    playedAt?: string;
+    alreadyPlayed: boolean;
+  } | null>(null);
   const [hintsUsed, setHintsUsed] = useState({
     releaseDate: false,
     baseDamage: false,
@@ -219,6 +230,33 @@ const Splatdle = () => {
 
   const { loggedIn, userData, isLoading: authLoading } = useAuth();
   const { logout } = useLogout();
+
+  // Animation hook for counting up numbers
+  const useCountUp = (end: number, duration: number = 1000, shouldAnimate: boolean = true) => {
+    const [count, setCount] = useState(shouldAnimate ? 0 : end);
+    
+    useEffect(() => {
+      if (!shouldAnimate) {
+        setCount(end);
+        return;
+      }
+      
+      let startTime: number;
+      const animate = (currentTime: number) => {
+        if (!startTime) startTime = currentTime;
+        const progress = Math.min((currentTime - startTime) / duration, 1);
+        setCount(Math.floor(progress * end));
+        
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        }
+      };
+      
+      requestAnimationFrame(animate);
+    }, [end, duration, shouldAnimate]);
+    
+    return count;
+  };
 
   // Helper function to get the correct weapon object
   const getCorrectWeapon = (): Weapon | undefined => {
@@ -317,7 +355,39 @@ const Splatdle = () => {
       });
 
       if (response.ok) {
+        const data = await response.json();
         setStatsPosted(true);
+        
+        // Handle already played response
+        if (data.status === "already_played") {
+          setUserStats({
+            streak: data.streak,
+            totalGames: data.totalGames,
+            averageGuesses: data.averageGuesses,
+            globalAverage: data.globalAverage,
+            isNewStreak: false,
+            guessCount: data.todaysGuesses,
+            personalPerformance: data.todaysGuesses < data.averageGuesses ? "above" : 
+                                data.todaysGuesses > data.averageGuesses ? "below" : "equal",
+            playedAt: data.playedAt,
+            alreadyPlayed: true
+          });
+        } else {
+          // Store user stats if returned for new games
+          if (data.streak !== undefined) {
+            setUserStats({
+              streak: data.streak,
+              totalGames: data.totalGames,
+              averageGuesses: data.averageGuesses,
+              globalAverage: data.globalAverage,
+              isNewStreak: data.isNewStreak,
+              guessCount: data.guessCount,
+              personalPerformance: data.personalPerformance,
+              alreadyPlayed: false
+            });
+          }
+        }
+        
         saveGameState(guesses, gameWon, gameData?.answer || "", true, hintsUsed);
       }
     } catch (error) {
@@ -330,6 +400,7 @@ const Splatdle = () => {
     if (!query.trim()) return [];
 
     const normalizedQuery = query.toLowerCase().trim();
+    const queryWords = normalizedQuery.split(/\s+/);
     
     return weapons
       .filter(weapon => 
@@ -342,9 +413,17 @@ const Splatdle = () => {
         const className = weapon.class.toLowerCase();
         const gameName = weapon.game.toLowerCase();
         
-        return name.includes(normalizedQuery) || 
-               className.includes(normalizedQuery) || 
-               gameName.includes(normalizedQuery);
+        // Check if the original query matches (for backwards compatibility)
+        const basicMatch = name.includes(normalizedQuery) || 
+                          className.includes(normalizedQuery) || 
+                          gameName.includes(normalizedQuery);
+        
+        // Check if all words in the query appear in the weapon name (partial word matching)
+        const allWordsMatch = queryWords.every(word => 
+          name.includes(word) || className.includes(word) || gameName.includes(word)
+        );
+        
+        return basicMatch || allWordsMatch;
       })
       .sort((a, b) => {
         const aName = a.name.toLowerCase();
@@ -357,6 +436,22 @@ const Splatdle = () => {
         // Starts with query
         if (aName.startsWith(normalizedQuery) && !bName.startsWith(normalizedQuery)) return -1;
         if (bName.startsWith(normalizedQuery) && !aName.startsWith(normalizedQuery)) return 1;
+        
+        // Prefer matches where words appear in order
+        const aWordsInOrder = queryWords.every((word, index) => {
+          const wordIndex = aName.indexOf(word);
+          const prevWordIndex = index > 0 ? aName.indexOf(queryWords[index - 1]) : -1;
+          return wordIndex > prevWordIndex;
+        });
+        
+        const bWordsInOrder = queryWords.every((word, index) => {
+          const wordIndex = bName.indexOf(word);
+          const prevWordIndex = index > 0 ? bName.indexOf(queryWords[index - 1]) : -1;
+          return wordIndex > prevWordIndex;
+        });
+        
+        if (aWordsInOrder && !bWordsInOrder) return -1;
+        if (bWordsInOrder && !aWordsInOrder) return 1;
         
         // Alphabetical
         return aName.localeCompare(bName);
@@ -718,7 +813,111 @@ const Splatdle = () => {
               in {guesses.length} {guesses.length === 1 ? "guess" : "guesses"}!
             </p>
 
-            {loggedIn && statsPosted && (
+            {/* Streak Display */}
+            {loggedIn && userStats && (() => {
+              const animatedStreak = useCountUp(userStats.streak, 1500, userStats.isNewStreak && userStats.streak > 0);
+              
+              return (
+                <div className="mt-4 p-4 bg-slate-800/50 rounded-xl border border-slate-700/50">
+                  {/* Already Played Message */}
+                  {userStats.alreadyPlayed && (
+                    <div className="mb-3 p-2 bg-amber-900/20 border border-amber-600/30 rounded-lg">
+                      <div className="text-amber-400 text-sm font-medium text-center">
+                        ⏰ Stats already posted for today
+                      </div>
+                      {userStats.playedAt && (
+                        <div className="text-amber-300 text-xs text-center mt-1">
+                          Posted on {new Date(userStats.playedAt).toLocaleDateString()} at {new Date(userStats.playedAt).toLocaleTimeString()}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <div className="relative">
+                      <div className={`text-3xl ${userStats.isNewStreak && userStats.streak > 0 ? 'animate-pulse' : ''}`}>
+                        {userStats.streak > 0 ? (
+                          <span className="relative inline-block">
+                            🔥
+                            {userStats.isNewStreak && !userStats.alreadyPlayed && (
+                              <span className="absolute -top-2 -right-2 text-xs animate-bounce">
+                                <span className="inline-block animate-spin">⭐</span>
+                              </span>
+                            )}
+                          </span>
+                        ) : '💔'}
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-lg font-bold text-orange-400">
+                        <span className={userStats.isNewStreak && userStats.streak > 0 && !userStats.alreadyPlayed ? 'animate-pulse' : ''}>
+                          {userStats.alreadyPlayed ? userStats.streak : animatedStreak}
+                        </span>
+                        {' '}
+                        {userStats.streak === 1 ? 'day' : 'days'} streak
+                      </div>
+                      {userStats.isNewStreak && userStats.streak > 0 && !userStats.alreadyPlayed && (
+                        <div className="text-xs text-orange-300 animate-pulse">
+                          {userStats.streak === 1 ? '🎉 Streak started!' : '🚀 Streak continues!'}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Performance Comparison */}
+                  <div className={`text-sm text-slate-400 mt-2 ${userStats.isNewStreak && !userStats.alreadyPlayed ? 'animate-fade-in-up' : ''}`} 
+                       style={{ animationDelay: userStats.isNewStreak && !userStats.alreadyPlayed ? '0.5s' : '0s' }}>
+                    
+                    {/* Today's Performance vs Personal Average */}
+                    <div className="flex items-center justify-center gap-1 mb-1">
+                      <span>{userStats.alreadyPlayed ? 'Your posted performance:' : 'Today\'s performance:'}</span>
+                      {userStats.personalPerformance === "above" ? (
+                        <span className="text-emerald-400 font-medium">
+                          🌟 Better than your average ({userStats.guessCount} vs {userStats.averageGuesses.toFixed(1)})
+                        </span>
+                      ) : userStats.personalPerformance === "below" ? (
+                        <span className="text-orange-400 font-medium">
+                          📊 Above your average ({userStats.guessCount} vs {userStats.averageGuesses.toFixed(1)})
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 font-medium">
+                          🎯 Right at your average ({userStats.guessCount})
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* Overall Performance vs Global Average */}
+                    <div className="flex items-center justify-center gap-1">
+                      <span>Overall vs global:</span>
+                      {userStats.averageGuesses < userStats.globalAverage ? (
+                        <span className="text-emerald-400 font-medium">
+                          📈 Above average ({userStats.averageGuesses.toFixed(1)} vs {userStats.globalAverage.toFixed(1)})
+                        </span>
+                      ) : userStats.averageGuesses > userStats.globalAverage ? (
+                        <span className="text-amber-400 font-medium">
+                          📉 Below average ({userStats.averageGuesses.toFixed(1)} vs {userStats.globalAverage.toFixed(1)})
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 font-medium">
+                          🎯 Average ({userStats.averageGuesses.toFixed(1)})
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="text-xs text-slate-500 mt-1">
+                      Games played: {userStats.totalGames}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {loggedIn && statsPosted && !userStats && (
+              <p className="text-sm text-emerald-400 mt-2">
+                ✅ Stats posted to leaderboard!
+              </p>
+            )}
+            {loggedIn && statsPosted && userStats && !userStats.alreadyPlayed && (
               <p className="text-sm text-emerald-400 mt-2">
                 ✅ Stats posted to leaderboard!
               </p>

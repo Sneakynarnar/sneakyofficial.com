@@ -2,6 +2,7 @@ import time
 import logging
 from urllib.parse import urlparse
 from aiohttp import web
+from typing import Any, Optional, Dict
 from backend.util.database_context_manager import DBContextManager
 from . import OauthBase
 from backend.util.config import global_config
@@ -10,7 +11,18 @@ logger = logging.getLogger("webserver")
 
 
 class DiscordOauthHandler(OauthBase):
-    def __init__(self,):
+    """Discord OAuth2 authentication handler.
+
+    Handles Discord OAuth2 flow including authorization, token exchange,
+    user information retrieval, and authentication status checking.
+
+    Inherits from OauthBase and implements Discord-specific OAuth logic.
+    """
+    def __init__(self) -> None:
+        """Initialize the Discord OAuth handler.
+
+        Sets up Discord API endpoints and client configuration.
+        """
         base_url = "https://discord.com/api/v10"
         super().__init__(
             platform="discord",
@@ -25,9 +37,17 @@ class DiscordOauthHandler(OauthBase):
             }
         )
 
-    async def handle_callback(self, request):
-        """
-        Handle the callback from Discord OAuth2.
+    async def handle_callback(self, request: web.Request) -> web.Response:
+        """Handle the OAuth2 callback from Discord.
+
+        Processes the authorization code, exchanges it for tokens,
+        stores user information, and sets authentication cookies.
+
+        Args:
+            request: The callback request containing the authorization code.
+
+        Returns:
+            Redirect response to the authorized page or error response.
         """
 
         auth_response_url = self.get_request_url(request)
@@ -40,7 +60,6 @@ class DiscordOauthHandler(OauthBase):
         if not code:
             return web.HTTPFound("/")
 
-        # Exchange code for tokens
         try:
             token = self.oauth2_client.fetch_token(
                 self._token_url,
@@ -52,11 +71,9 @@ class DiscordOauthHandler(OauthBase):
 
         access_token = token.get("access_token")
         refresh_token = token.get("refresh_token")
-        # Default 1 hour if not provided
         expires_at = time.time() + token.get("expires_in", 3600)
 
         if access_token:
-            # Fetch user info from Discord
             user = await self.get_user_info(access_token)
             if user:
                 user_id = user.get("id")
@@ -73,7 +90,7 @@ class DiscordOauthHandler(OauthBase):
                             """
                             INSERT INTO UserTokens (discord_id, access_token, refresh_token, expires_at)
                             VALUES (%s, %s, %s, %s)
-                            ON DUPLICATE KEY UPDATE 
+                            ON DUPLICATE KEY UPDATE
                                 access_token = VALUES(access_token),
                                 refresh_token = VALUES(refresh_token),
                                 expires_at = VALUES(expires_at)
@@ -98,9 +115,14 @@ class DiscordOauthHandler(OauthBase):
         else:
             return web.Response(text="Access token not found.", status=500)
 
-    async def get_user_info(self, access_token):
-        """
-        Fetch the user's Discord ID.
+    async def get_user_info(self, access_token: str) -> Optional[Dict[str, Any]]:
+        """Fetch Discord user information using access token.
+
+        Args:
+            access_token: Valid Discord access token.
+
+        Returns:
+            Dictionary containing user data or None if request fails.
         """
         if not access_token:
             return
@@ -113,7 +135,18 @@ class DiscordOauthHandler(OauthBase):
             user_data = await response.json()
             return user_data
 
-    async def check_auth_status(self, request):
+    async def check_auth_status(self, request: web.Request) -> web.Response:
+        """Check if the user is authenticated and return their status.
+
+        Validates the access token and returns user information along
+        with their Splatdle statistics if available.
+
+        Args:
+            request: The request containing authentication cookies.
+
+        Returns:
+            JSON response with authentication status and user data.
+        """
         access_token = request.cookies.get("discord_access_token")
         logger.debug("Checking discord auth status...")
         if not access_token:

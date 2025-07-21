@@ -1,38 +1,36 @@
-# pylint: skip-file
-# flake8: noqa
 import argparse
 import asyncio
 import traceback
 import os
 import logging
 import pkgutil
-# import nest_asyncio
+from typing import List
 from dotenv import load_dotenv
 import interactions
-from interactions.ext import prefixed_commands
 from interactions import Intents
-from interactions.ext.prefixed_commands.help import PrefixedHelpCommand
-
+from backend.util import global_config
 from backend.website import WebServer, __version__, __author__, setup_logging
 
 setup_logging()
 
 logger = logging.getLogger("sneakyoffical.com")
+# fmt: off
+# pylint: disable=line-too-long
 ASCII_BANNER = fr"""
 =================================================================================================================================================================
 
-  ______                                 __                             ______    ______   __                      __                                       
- /      \                               /  |                           /      \  /      \ /  |                    /  |                                      
-/$$$$$$  | _______    ______    ______  $$ |   __  __    __   ______  /$$$$$$  |/$$$$$$  |$$/   _______   ______  $$ |      _______   ______   _____  ____  
-$$ \__$$/ /       \  /      \  /      \ $$ |  /  |/  |  /  | /      \ $$ |_ $$/ $$ |_ $$/ /  | /       | /      \ $$ |     /       | /      \ /     \/    \ 
+  ______                                 __                             ______    ______   __                      __
+ /      \                               /  |                           /      \  /      \ /  |                    /  |
+/$$$$$$  | _______    ______    ______  $$ |   __  __    __   ______  /$$$$$$  |/$$$$$$  |$$/   _______   ______  $$ |      _______   ______   _____  ____
+$$ \__$$/ /       \  /      \  /      \ $$ |  /  |/  |  /  | /      \ $$ |_ $$/ $$ |_ $$/ /  | /       | /      \ $$ |     /       | /      \ /     \/    \
 $$      \ $$$$$$$  |/$$$$$$  | $$$$$$  |$$ |_/$$/ $$ |  $$ |/$$$$$$  |$$   |    $$   |    $$ |/$$$$$$$/  $$$$$$  |$$ |    /$$$$$$$/ /$$$$$$  |$$$$$$ $$$$  |
  $$$$$$  |$$ |  $$ |$$    $$ | /    $$ |$$   $$<  $$ |  $$ |$$ |  $$ |$$$$/     $$$$/     $$ |$$ |       /    $$ |$$ |    $$ |      $$ |  $$ |$$ | $$ | $$ |
 /  \__$$ |$$ |  $$ |$$$$$$$$/ /$$$$$$$ |$$$$$$  \ $$ \__$$ |$$ \__$$ |$$ |      $$ |      $$ |$$ \_____ /$$$$$$$ |$$ | __ $$ \_____ $$ \__$$ |$$ | $$ | $$ |
 $$    $$/ $$ |  $$ |$$       |$$    $$ |$$ | $$  |$$    $$ |$$    $$/ $$ |      $$ |      $$ |$$       |$$    $$ |$$ |/  |$$       |$$    $$/ $$ | $$ | $$ |
- $$$$$$/  $$/   $$/  $$$$$$$/  $$$$$$$/ $$/   $$/  $$$$$$$ | $$$$$$/  $$/       $$/       $$/  $$$$$$$/  $$$$$$$/ $$/ $$/  $$$$$$$/  $$$$$$/  $$/  $$/  $$/ 
-                                                  /  \__$$ |                                                                                                
-                                                  $$    $$/                                                                                                 
-                                                   $$$$$$/                                                                                                  
+ $$$$$$/  $$/   $$/  $$$$$$$/  $$$$$$$/ $$/   $$/  $$$$$$$ | $$$$$$/  $$/       $$/       $$/  $$$$$$$/  $$$$$$$/ $$/ $$/  $$$$$$$/  $$$$$$/  $$/  $$/  $$/
+                                                  /  \__$$ |
+                                                  $$    $$/
+                                                   $$$$$$/
 
 ==================================================================================================================================================================
 Version: {__version__}
@@ -40,53 +38,59 @@ Version: {__version__}
 Author: {__author__}
 ==================================================================================================================================================================
 """
+# pylint: enable=line-too-long
+# fmt: on
 
 logger.info(ASCII_BANNER)
 
-# Argument parser setup
 parser = argparse.ArgumentParser(description="Sneaky's application")
 parser.add_argument('--override-env', action='store_true',
                     help='Override environment variables')
 args = parser.parse_args()
 
 load_dotenv(override=args.override_env)
-# nest_asyncio.apply()
-# INTENTS = Intents.PRIVILEGED | Intents.GUILD_MESSAGES | Intents.GUILDS | Intents.GUILD_VOICE_STATES | \
-#     Intents.DIRECT_MESSAGES | Intents.REACTIONS
-# CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-# BOT_DIR = os.path.join(CURRENT_DIR, 'bot')
+INTENTS = Intents.PRIVILEGED | Intents.GUILD_MESSAGES | Intents.GUILDS | Intents.GUILD_VOICE_STATES | \
+    Intents.DIRECT_MESSAGES | Intents.REACTIONS
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+BOT_DIR = os.path.join(CURRENT_DIR, 'backend', 'bot')
 
-# bot = interactions.Client(intents=INTENTS)
-# if config.TEST:
-#     prefixed_commands.setup(client=bot, default_prefix=[
-#                             "?", f"<@{config.DISCORD_CLIENT_ID}> "])
-# else:
-#     prefixed_commands.setup(client=bot, default_prefix=[
-#                             "!", f"<@{config.DISCORD_CLIENT_ID}> "])
-# ext_names = [m.name for m in pkgutil.iter_modules([BOT_DIR], prefix='bot.')]
-# for ext in ext_names:
-#     try:
-#         bot.load_extension(ext)
-#         logger.info("Loaded %s", ext + ".")
-#     except Exception as e:
-#         logger.error("Error loading %s: %s", ext + "extention.", e)
-#         traceback.print_exc()
+bot = interactions.Client(intents=INTENTS)
 
-# help_cmd = PrefixedHelpCommand(
-#     client=bot, embed_color=config.THEME_COLOUR, show_aliases=True, show_prefix=True)
-# help_cmd.register()
-
-
-async def main():
-    webserver = WebServer()
+ext_names: List[str] = [m.name for m in pkgutil.iter_modules([BOT_DIR], prefix='backend.bot.')]
+for ext in ext_names:
     try:
-        await webserver.run()
-        while True:
-            await asyncio.sleep(3600)  # keep alive
-    except KeyboardInterrupt:
-        print("Shutting down...")
-    finally:
-        await webserver.close()
+        bot.load_extension(ext)
+        logger.info("Loaded %s", ext + ".")
+    except Exception as e:
+        logger.error("Error loading %s: %s", ext + " extention.", e)
+        traceback.print_exc()
+
+
+async def run_services() -> None:
+    """Run the main application services.
+
+    Starts the web server and Discord bot concurrently,
+    handling the main application loop.
+    """
+    """
+    Main method
+    """
+    webserver = WebServer(bot=bot)
+    logger.info("Using client ID: %s", global_config.client_id)
+    logger.info("Running the application...")
+    await asyncio.gather(
+        webserver.run(),
+        bot.astart(global_config.discord_token),
+    )
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(run_services())
+    except RuntimeError as e:
+        if str(e) == "asyncio.run() cannot be called from a running event loop":
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(run_services())
+        else:
+            raise ValueError() from e
+    except KeyboardInterrupt:
+        print("Shutting down...")

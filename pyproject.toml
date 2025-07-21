@@ -1,0 +1,43 @@
+[tool.mypy]
+ignore_missing_imports = true
+warn_unused_configs = true
+disallow_subclassing_any = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+
+[tool.autopep8]
+max_line_length = 120
+in-place = true
+aggressive = 1
+
+
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "cython_setup.py",
+    "setup.py",
+    "__init__.py",
+    "*/tests/*"
+]
+
+[tool.flake8]
+max-line-length = 120
+ignore = ["N803"]
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    ".venv",
+    "venv",
+    "__init__.py"
+]
+
+[tool.pylint.'MASTER']
+ignore-patterns = [".*?test_.*?py", "__init__.py"]
+
+[tool.pylint.'MESSAGES CONTROL']
+max-line-length = 120
+disable = [
+    "too-many-instance-attributes"
+]
