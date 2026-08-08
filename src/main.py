@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 import interactions
 from interactions import Intents
 from backend.util import global_config
+from backend.util.database_context_manager import DBContextManager
 from backend.website import WebServer, __version__, __author__, setup_logging
 from backend.twitch import TwitchBot
 
@@ -115,7 +116,10 @@ async def run_services() -> None:
     else:
         logger.info("Twitch bot not configured — skipping (set TWITCH_BOT_TOKEN and TWITCH_CHANNEL to enable).")
 
-    await asyncio.gather(*services)
+    try:
+        await asyncio.gather(*services)
+    finally:
+        await DBContextManager.close_pool()
 
 if __name__ == "__main__":
     try:
