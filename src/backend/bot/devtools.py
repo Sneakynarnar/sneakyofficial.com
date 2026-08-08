@@ -3,6 +3,7 @@
 Provides debugging, monitoring, and administrative functionality
 for bot maintenance and error handling.
 """
+import asyncio
 import logging
 import traceback
 import uuid
@@ -10,7 +11,7 @@ from typing import Optional
 
 import interactions
 from interactions import slash_command, slash_option, slash_default_member_permission, OptionType, Permissions
-from interactions.api.events import CommandError, CommandCompletion, Startup, MemberAdd
+from interactions.api.events import CommandError, CommandCompletion, Startup, MemberAdd, Disconnect
 from backend.util import global_config
 from version import __version__
 
@@ -278,6 +279,123 @@ class DevTools(interactions.Extension):
 
         await ctx.send(result_message)
 
+    @slash_command(
+        name="giveall",
+        description="Give a role to every non-bot member in the server"
+    )
+    @slash_default_member_permission(Permissions.ADMINISTRATOR)
+    @slash_option(
+        name="role",
+        description="The role to give to everyone",
+        required=True,
+        opt_type=OptionType.ROLE
+    )
+    async def giveall(self, ctx: interactions.SlashContext, role: interactions.Role) -> None:
+        """
+        Give a role to every non-bot member in the server.
+
+        Parameters:
+        - ctx: The context of the command.
+        - role: The role to assign to all human members.
+
+        Returns:
+        - None
+
+        Description:
+        Fetches the full member list from the API, then assigns the role to every
+        member that is not a bot and does not already have it. Requires
+        administrator permissions.
+
+        Example usage:
+        /giveall role:<role_name>
+        """
+        if ctx.guild is None:
+            await ctx.send("❌ This command can only be used in a server.", ephemeral=True)
+            return
+
+        if role.managed:
+            await ctx.send(
+                f"❌ **{role.name}** is managed by an integration or bot and cannot be assigned manually.",
+                ephemeral=True
+            )
+            return
+
+        if not role.is_assignable:
+            await ctx.send(
+                f"❌ I can't assign **{role.name}** — it sits above my highest role. "
+                "Move my role above it and try again.",
+                ephemeral=True
+            )
+            return
+
+        await ctx.defer()
+
+        # Make sure the member cache is complete, otherwise we only touch cached members
+        try:
+            await ctx.guild.http_chunk()
+        except Exception as e:
+            logger.error("Failed to chunk guild %s for /giveall: %s", ctx.guild.id, e)
+            await ctx.send("❌ Failed to fetch the member list. Try again in a moment.")
+            return
+
+        targets = [
+            member for member in ctx.guild.members
+            if not member.bot and not member.has_role(role)
+        ]
+        already_had = sum(
+            1 for member in ctx.guild.members
+            if not member.bot and member.has_role(role)
+        )
+
+        if not targets:
+            await ctx.send(
+                f"✅ Nothing to do — all **{already_had}** non-bot member(s) already have **{role.name}**."
+            )
+            return
+
+        progress = await ctx.send(
+            f"⏳ Giving **{role.name}** to **{len(targets)}** member(s)... this may take a while."
+        )
+
+        added = 0
+        failed = 0
+        reason = f"/giveall by {ctx.author.username} ({ctx.author_id})"
+
+        for index, member in enumerate(targets, start=1):
+            try:
+                await member.add_role(role, reason=reason)
+                added += 1
+            except Exception as e:
+                failed += 1
+                logger.error("Failed to give role %s to %s: %s", role.id, member.id, e)
+
+            # Stay polite to the role-assignment rate limit
+            await asyncio.sleep(0.3)
+
+            if index % 25 == 0:
+                try:
+                    await progress.edit(
+                        content=f"⏳ Giving **{role.name}**... {index}/{len(targets)} processed."
+                    )
+                except Exception:
+                    pass
+
+        result_message = f"✅ Gave **{role.name}** to **{added}** member(s)"
+        if already_had:
+            result_message += f"\nℹ️ **{already_had}** member(s) already had it"
+        if failed:
+            result_message += f"\n⚠️ Failed for **{failed}** member(s)"
+
+        try:
+            await progress.edit(content=result_message)
+        except Exception:
+            await ctx.send(result_message)
+
+        logger.info(
+            "/giveall: role %s in guild %s — added=%s already_had=%s failed=%s",
+            role.id, ctx.guild.id, added, already_had, failed
+        )
+
     _WELCOME_GUILD   = 1019293451579293747
     _WELCOME_CHANNEL = 1019293452451725384
 
@@ -299,6 +417,16 @@ class DevTools(interactions.Extension):
             f"Welcome to the server, {member.mention}! 🦑\n"
             f"Head over to the channels and introduce yourself. Hope you enjoy your stay!"
         )
+
+    @interactions.listen(Disconnect)
+    async def on_disconnect(self) -> None:
+        """Log gateway disconnects.
+
+        Background tasks keep running (and the HTTP client re-logs in on demand)
+        when the gateway drops, so without this the bot looks alive while it is
+        no longer receiving commands. main.py supervises and reconnects.
+        """
+        logger.warning("Discord gateway disconnected — commands will not be received until it reconnects")
 
     @interactions.listen(Startup)
     async def assign_channel(self) -> None:

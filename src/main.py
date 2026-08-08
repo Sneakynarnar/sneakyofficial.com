@@ -67,6 +67,36 @@ for ext in ext_names:
         traceback.print_exc()
 
 
+async def run_discord_bot() -> None:
+    """Run the Discord bot, restarting the gateway if it ever drops out.
+
+    interactions.py swallows unhandled exceptions raised inside its shard task
+    (``ConnectionState._ws_connect``): it logs the traceback and simply returns.
+    ``astart()`` then returns normally, so the process stays alive with no
+    gateway connection at all. Because the HTTP client transparently re-logs in
+    when its session is closed, background tasks (Splatdle reminders and the
+    like) carry on posting messages, which makes the bot look healthy while
+    slash commands, buttons and member joins are silently dead until a manual
+    restart. Supervise the gateway here so it comes back on its own.
+    """
+    backoff = 5
+    while True:
+        started_at = asyncio.get_event_loop().time()
+        try:
+            await bot.astart(global_config.discord_token)
+            logger.error("Discord gateway exited unexpectedly, reconnecting in %ss", backoff)
+        except Exception:  # CancelledError is a BaseException, so shutdown still propagates
+            logger.exception("Discord gateway crashed, reconnecting in %ss", backoff)
+
+        # A connection that lasted a while is a healthy one, so start over from
+        # a short delay rather than punishing it for an earlier bad patch.
+        if asyncio.get_event_loop().time() - started_at > 300:
+            backoff = 5
+
+        await asyncio.sleep(backoff)
+        backoff = min(backoff * 2, 300)
+
+
 async def run_services() -> None:
     """Run the main application services."""
     webserver = WebServer(bot=bot)
@@ -75,7 +105,7 @@ async def run_services() -> None:
 
     services = [
         webserver.run(),
-        bot.astart(global_config.discord_token),
+        run_discord_bot(),
     ]
 
     if global_config.twitch_bot_token and global_config.twitch_channel:
