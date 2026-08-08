@@ -2635,14 +2635,20 @@ export function MapPoolPresetsSection({ tournamentId }: { tournamentId: number }
 // ---- Overlay settings section -------------------------------------------
 
 type RibbonMode = "idle" | "active" | "open_lobby";
+type MatchType  = "open_battle" | "private_battle";
 
 export function OverlaySettingsSection() {
   const [open, setOpen]           = useState(false);
   const [ribbonMode, setRibbonMode] = useState<RibbonMode>("active");
-  const [stage, setStage]         = useState("");
-  const [modeId, setModeId]       = useState("");
+  const [matchType, setMatchType] = useState<MatchType>("open_battle");
+  // Map slot 1
+  const [stage,  setStage]  = useState("");
+  const [modeId, setModeId] = useState("");
+  // Map slot 2 (open battle)
+  const [stage2,  setStage2]  = useState("");
+  const [modeId2, setModeId2] = useState("");
   const [roomCode, setRoomCode]   = useState("");
-  const [poolChannel, setPoolChannel] = useState("sneakyn");
+  const [lobbyPool, setLobbyPool] = useState("sneakyn");
   const [saving, setSaving]       = useState(false);
   const [msg, setMsg]             = useState<{ text: string; ok: boolean } | null>(null);
   const [loaded, setLoaded]       = useState(false);
@@ -2652,27 +2658,36 @@ export function OverlaySettingsSection() {
     try {
       const { data } = await axios.get(`${API_URL}/api/tournament/overlay/settings`);
       setRibbonMode(data.ribbon_mode ?? "active");
+      setMatchType(data.open_lobby_match_type ?? "open_battle");
       setStage(data.open_lobby_stage ?? "");
       setModeId(data.open_lobby_mode_id ?? "");
+      setStage2(data.open_lobby_stage_2 ?? "");
+      setModeId2(data.open_lobby_mode_id_2 ?? "");
       setRoomCode(data.open_lobby_room_code ?? "");
-      setPoolChannel(data.weapon_pool_channel ?? "sneakyn");
+      setLobbyPool(data.lobby_pool ?? "");
       setLoaded(true);
     } catch { /* best-effort */ }
   }, [loaded]);
 
   const save = async () => {
     setSaving(true);
-    const modeName = MODES.find((m) => m.id === modeId)?.name ?? null;
+    const modeName  = MODES.find((m) => m.id === modeId)?.name  ?? null;
+    const modeName2 = MODES.find((m) => m.id === modeId2)?.name ?? null;
+    const isOpen = matchType === "open_battle";
     try {
       const { data } = await axios.post(
         `${API_URL}/api/tournament/admin/overlay-settings`,
         {
           ribbon_mode: ribbonMode,
-          open_lobby_stage: stage || null,
-          open_lobby_mode_id: modeId || null,
-          open_lobby_mode_name: modeName,
+          open_lobby_match_type: matchType,
+          open_lobby_stage:      isOpen ? (stage  || null) : null,
+          open_lobby_mode_id:    isOpen ? (modeId || null) : null,
+          open_lobby_mode_name:  isOpen ? modeName          : null,
+          open_lobby_stage_2:    isOpen ? (stage2  || null) : null,
+          open_lobby_mode_id_2:  isOpen ? (modeId2 || null) : null,
+          open_lobby_mode_name_2: isOpen ? modeName2        : null,
           open_lobby_room_code: roomCode || null,
-          weapon_pool_channel: poolChannel.trim() || "sneakyn",
+          lobby_pool: lobbyPool.trim() || null,
         },
         { withCredentials: true },
       );
@@ -2688,7 +2703,7 @@ export function OverlaySettingsSection() {
   const MODES_LABELS: { id: RibbonMode; label: string; hint: string }[] = [
     { id: "idle",       label: "Idle",         hint: "Forces idle slides regardless of match state." },
     { id: "active",     label: "Active Match",  hint: "Shows the pinned tournament match if one exists." },
-    { id: "open_lobby", label: "Open Lobby",    hint: "Shows public lobby info — set pool and room code below." },
+    { id: "open_lobby", label: "Lobby",         hint: "Shows lobby info on both overlays — choose match type below." },
   ];
 
   return (
@@ -2712,7 +2727,7 @@ export function OverlaySettingsSection() {
 
           {/* Ribbon mode picker */}
           <div>
-            <p className="text-[11px] text-slate-500 uppercase tracking-wide font-semibold mb-2">Ribbon Mode</p>
+            <p className="text-[11px] text-slate-500 uppercase tracking-wide font-semibold mb-2">Overlay Mode</p>
             <div className="flex gap-2 flex-wrap">
               {MODES_LABELS.map(({ id, label }) => (
                 <button
@@ -2733,65 +2748,133 @@ export function OverlaySettingsSection() {
             </p>
           </div>
 
-          {/* Open lobby fields */}
+          {/* Lobby sub-settings */}
           {ribbonMode === "open_lobby" && (
-            <div className="flex gap-3 flex-wrap">
-              <div className="flex flex-col gap-1 flex-1 min-w-[130px]">
-                <label className="text-[11px] text-slate-500 uppercase tracking-wide">Mode</label>
-                <select
-                  value={modeId}
-                  onChange={(e) => setModeId(e.target.value)}
-                  className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-purple-500"
-                >
-                  <option value="">— not set —</option>
-                  {MODES.map((m) => (
-                    <option key={m.id} value={m.id}>{m.name}</option>
+            <div className="flex flex-col gap-3 pl-3 border-l border-slate-700/50">
+
+              {/* Match type toggle */}
+              <div>
+                <p className="text-[11px] text-slate-500 uppercase tracking-wide font-semibold mb-2">Match Type</p>
+                <div className="flex gap-2">
+                  {(["open_battle", "private_battle"] as const).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setMatchType(t)}
+                      className={`px-3 py-1.5 rounded text-xs font-medium border transition-colors ${
+                        matchType === t
+                          ? t === "open_battle"
+                            ? "bg-green-700/70 border-green-500/60 text-white"
+                            : "bg-purple-700/70 border-purple-500/60 text-white"
+                          : "bg-slate-700/60 border-slate-600/50 text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      {t === "open_battle" ? "Anarchy Open" : "Private Battle"}
+                    </button>
                   ))}
-                </select>
+                </div>
+                <p className="text-[11px] text-slate-600 mt-1.5">
+                  {matchType === "open_battle"
+                    ? "Viewers search the pool in Anarchy Open. Set the maps below to show them on the ribbon."
+                    : "Viewers enter the pool and room code in-game. Host picks the maps."}
+                </p>
               </div>
-              <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
-                <label className="text-[11px] text-slate-500 uppercase tracking-wide">Stage</label>
-                <select
-                  value={stage}
-                  onChange={(e) => setStage(e.target.value)}
-                  className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-purple-500"
-                >
-                  <option value="">— not set —</option>
-                  {STAGES.map((s) => (
-                    <option key={s.name} value={s.name}>{s.name}</option>
-                  ))}
-                </select>
+
+              {/* Open Battle: two map + mode slots */}
+              {matchType === "open_battle" && (
+                <div className="flex flex-col gap-2">
+                  {/* Slot 1 */}
+                  <div>
+                    <p className="text-[10px] text-slate-600 uppercase tracking-wide mb-1">Map 1</p>
+                    <div className="flex gap-2 flex-wrap">
+                      <div className="flex flex-col gap-1 flex-1 min-w-[130px]">
+                        <label className="text-[11px] text-slate-500 uppercase tracking-wide">Mode</label>
+                        <select
+                          value={modeId}
+                          onChange={(e) => setModeId(e.target.value)}
+                          className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-purple-500"
+                        >
+                          <option value="">— not set —</option>
+                          {MODES.map((m) => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
+                        <label className="text-[11px] text-slate-500 uppercase tracking-wide">Stage</label>
+                        <select
+                          value={stage}
+                          onChange={(e) => setStage(e.target.value)}
+                          className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-purple-500"
+                        >
+                          <option value="">— not set —</option>
+                          {STAGES.map((s) => (
+                            <option key={s.name} value={s.name}>{s.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Slot 2 */}
+                  <div>
+                    <p className="text-[10px] text-slate-600 uppercase tracking-wide mb-1">Map 2</p>
+                    <div className="flex gap-2 flex-wrap">
+                      <div className="flex flex-col gap-1 flex-1 min-w-[130px]">
+                        <label className="text-[11px] text-slate-500 uppercase tracking-wide">Mode</label>
+                        <select
+                          value={modeId2}
+                          onChange={(e) => setModeId2(e.target.value)}
+                          className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-purple-500"
+                        >
+                          <option value="">— not set —</option>
+                          {MODES.map((m) => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
+                        <label className="text-[11px] text-slate-500 uppercase tracking-wide">Stage</label>
+                        <select
+                          value={stage2}
+                          onChange={(e) => setStage2(e.target.value)}
+                          className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-purple-500"
+                        >
+                          <option value="">— not set —</option>
+                          {STAGES.map((s) => (
+                            <option key={s.name} value={s.name}>{s.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Pool tag + room code — always shown for lobby */}
+              <div className="flex gap-3 flex-wrap">
+                <div className="flex flex-col gap-1 min-w-[100px]">
+                  <label className="text-[11px] text-slate-500 uppercase tracking-wide">Pool</label>
+                  <input
+                    value={lobbyPool}
+                    onChange={(e) => setLobbyPool(e.target.value.slice(0, 16))}
+                    placeholder="e.g. sneakyn"
+                    className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 font-mono focus:outline-none focus:border-purple-500 w-40"
+                  />
+                </div>
+                <div className="flex flex-col gap-1 min-w-[100px]">
+                  <label className="text-[11px] text-slate-500 uppercase tracking-wide">Room Code</label>
+                  <input
+                    value={roomCode}
+                    onChange={(e) => setRoomCode(e.target.value.slice(0, 8))}
+                    placeholder="e.g. 1234"
+                    className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 font-mono focus:outline-none focus:border-purple-500 w-40"
+                  />
+                </div>
               </div>
-              <div className="flex flex-col gap-1 min-w-[100px]">
-                <label className="text-[11px] text-slate-500 uppercase tracking-wide">Room Code</label>
-                <input
-                  value={roomCode}
-                  onChange={(e) => setRoomCode(e.target.value.slice(0, 8))}
-                  placeholder="e.g. 1234"
-                  className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 font-mono focus:outline-none focus:border-purple-500 w-full"
-                />
-              </div>
+              <p className="text-[11px] text-slate-600">
+                Both show on the ribbon. Pool also powers the <code className="text-slate-500">!pool</code> Twitch command, room code powers <code className="text-slate-500">!code</code>.
+              </p>
             </div>
           )}
-
-          {/* Weapon pool channel */}
-          <div className="flex flex-col gap-1">
-            <label className="text-[11px] text-slate-500 uppercase tracking-wide font-semibold">
-              Weapon Pool Channel
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                value={poolChannel}
-                onChange={(e) => setPoolChannel(e.target.value)}
-                placeholder="sneakyn"
-                className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-purple-500 w-40"
-              />
-              <span className="text-xs text-slate-600 truncate">
-                sendou.ink/u/{poolChannel || "sneakyn"}/builds
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-600">Used by the <code className="text-slate-500">!pool</code> Twitch command.</p>
-          </div>
 
           <button
             onClick={save}

@@ -620,11 +620,15 @@ class SneakyApi:
 
         _ov.update({
             "ribbon_mode": ribbon_mode,
+            "open_lobby_match_type": body.get("open_lobby_match_type") or "open_battle",
             "open_lobby_stage": body.get("open_lobby_stage") or None,
             "open_lobby_mode_id": body.get("open_lobby_mode_id") or None,
             "open_lobby_mode_name": body.get("open_lobby_mode_name") or None,
+            "open_lobby_stage_2": body.get("open_lobby_stage_2") or None,
+            "open_lobby_mode_id_2": body.get("open_lobby_mode_id_2") or None,
+            "open_lobby_mode_name_2": body.get("open_lobby_mode_name_2") or None,
             "open_lobby_room_code": body.get("open_lobby_room_code") or None,
-            "weapon_pool_channel": body.get("weapon_pool_channel") or "sneakyn",
+            "lobby_pool": (body.get("lobby_pool") or "").strip() or None,
         })
         await TournamentBroadcaster.get().broadcast({"event": "overlay_settings", **_ov.get()})
         return web.json_response({"ok": True})

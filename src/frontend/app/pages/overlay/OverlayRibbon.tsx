@@ -6,6 +6,85 @@ const API_URL  = import.meta.env.VITE_API_URL  ?? "";
 const GUILD_ID = import.meta.env.VITE_GUILD_ID ?? "";
 const DISCORD  = "discord.gg/gmJeQefe5X";
 
+// ── Overlay settings ──────────────────────────────────────────────────────────
+
+interface OverlaySettings {
+  ribbon_mode: "idle" | "active" | "open_lobby";
+  open_lobby_match_type: "open_battle" | "private_battle";
+  open_lobby_stage: string | null;
+  open_lobby_mode_id: string | null;
+  open_lobby_mode_name: string | null;
+  open_lobby_stage_2: string | null;
+  open_lobby_mode_id_2: string | null;
+  open_lobby_mode_name_2: string | null;
+  open_lobby_room_code: string | null;
+  lobby_pool: string | null;
+}
+
+const DEFAULT_SETTINGS: OverlaySettings = {
+  ribbon_mode: "active",
+  open_lobby_match_type: "open_battle",
+  open_lobby_stage: null,
+  open_lobby_mode_id: null,
+  open_lobby_mode_name: null,
+  open_lobby_stage_2: null,
+  open_lobby_mode_id_2: null,
+  open_lobby_mode_name_2: null,
+  open_lobby_room_code: null,
+  lobby_pool: null,
+};
+
+// ── Tournament map pool ticker ────────────────────────────────────────────────
+
+interface PoolEntry { modeId: string; modeName: string; modeIcon: string; stageName: string; stageImage: string }
+
+const POOL_TICK_MS = 3200;
+const POOL_FADE_MS = 300;
+
+/** Cycles the tournament map pool a page at a time — `pageSize` chips per page. */
+function usePoolTicker(pageSize: number) {
+  const [entries, setEntries] = useState<PoolEntry[]>([]);
+  const [page,    setPage]    = useState(0);
+  const [visible, setVisible] = useState(true);
+
+  const fetchPool = useCallback(async () => {
+    try {
+      const { data } = await axios.get(`${API_URL}/api/tournament/overlay/map-pool`, { params: { guild_id: GUILD_ID } });
+      const pool: Record<string, string[]> = data.pool ?? {};
+      const flat: PoolEntry[] = [];
+      for (const [modeId, stages] of Object.entries(pool)) {
+        const mode = MODES.find((m) => m.id === modeId);
+        if (!mode) continue;
+        for (const stageName of stages) {
+          const stage = STAGES.find((s) => s.name === stageName);
+          if (stage) flat.push({ modeId, modeName: mode.name, modeIcon: mode.icon, stageName, stageImage: stage.image });
+        }
+      }
+      setEntries(flat);
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => { fetchPool(); const t = setInterval(fetchPool, 30_000); return () => clearInterval(t); }, [fetchPool]);
+
+  const size      = Math.max(1, pageSize);
+  const pageCount = Math.max(1, Math.ceil(entries.length / size));
+
+  useEffect(() => { setPage(0); }, [pageCount]);
+
+  useEffect(() => {
+    if (pageCount <= 1) return;
+    const t = setInterval(() => {
+      setVisible(false);
+      setTimeout(() => { setPage((p) => (p + 1) % pageCount); setVisible(true); }, POOL_FADE_MS + 20);
+    }, POOL_TICK_MS);
+    return () => clearInterval(t);
+  }, [pageCount]);
+
+  const safePage = page % pageCount;
+  const start    = safePage * size;
+  return { page: entries.slice(start, start + size), visible, total: entries.length };
+}
+
 function getWsUrl(): string {
   const base = (API_URL as string) || window.location.origin;
   return base.replace(/^http/, "ws") + "/api/tournament/ws";
@@ -125,6 +204,21 @@ function useRibbonKeyframes() {
         background-size: 200% auto;
         animation: splRibbonAccentCycle 5s linear infinite;
       }
+      @keyframes splRibbonLobbyPulse {
+        0%, 100% { box-shadow: 0 0 8px rgba(52,211,153,0.4), 0 0 22px rgba(52,211,153,0.18); }
+        50%      { box-shadow: 0 0 18px rgba(52,211,153,0.8), 0 0 46px rgba(52,211,153,0.38), 0 0 80px rgba(52,211,153,0.12); }
+      }
+      @keyframes splRibbonPrivatePulse {
+        0%, 100% { box-shadow: 0 0 8px rgba(145,70,255,0.4), 0 0 22px rgba(145,70,255,0.18); }
+        50%      { box-shadow: 0 0 18px rgba(145,70,255,0.8), 0 0 46px rgba(145,70,255,0.38), 0 0 80px rgba(145,70,255,0.12); }
+      }
+      .spl-ribbon-lobby-glow   { animation: splRibbonLobbyPulse 2.4s ease-in-out infinite; }
+      .spl-ribbon-private-glow { animation: splRibbonPrivatePulse 2.4s ease-in-out infinite; }
+      .spl-ribbon-green-cycle {
+        background: linear-gradient(90deg, rgba(16,185,129,0.65), rgba(52,211,153,0.65), rgba(16,185,129,0.65));
+        background-size: 200% auto;
+        animation: splRibbonAccentCycle 4s linear infinite;
+      }
     `;
     document.head.appendChild(el);
   }, []);
@@ -134,6 +228,7 @@ function useRibbonKeyframes() {
 
 function useMatchData() {
   const [match,      setMatch]      = useState<OverlayMatchData | null>(null);
+  const [settings,   setSettings]   = useState<OverlaySettings>(DEFAULT_SETTINGS);
   const [scoreFlash, setScoreFlash] = useState(false);
   const [stageKey,   setStageKey]   = useState(0);
   const scoreRef = useRef<[number, number]>([0, 0]);
@@ -145,7 +240,25 @@ function useMatchData() {
     } catch { /* ignore */ }
   }, []);
 
-  useEffect(() => { fetchMatch(); }, [fetchMatch]);
+  const fetchSettings = useCallback(async () => {
+    try {
+      const { data } = await axios.get(`${API_URL}/api/tournament/overlay/settings`);
+      setSettings({
+        ribbon_mode:            data.ribbon_mode            ?? "active",
+        open_lobby_match_type:  data.open_lobby_match_type  ?? "open_battle",
+        open_lobby_stage:       data.open_lobby_stage       ?? null,
+        open_lobby_mode_id:     data.open_lobby_mode_id     ?? null,
+        open_lobby_mode_name:   data.open_lobby_mode_name   ?? null,
+        open_lobby_stage_2:     data.open_lobby_stage_2     ?? null,
+        open_lobby_mode_id_2:   data.open_lobby_mode_id_2   ?? null,
+        open_lobby_mode_name_2: data.open_lobby_mode_name_2 ?? null,
+        open_lobby_room_code:   data.open_lobby_room_code   ?? null,
+        lobby_pool:             data.lobby_pool             ?? null,
+      });
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => { fetchMatch(); fetchSettings(); }, [fetchMatch, fetchSettings]);
 
   useEffect(() => {
     if (!match) return;
@@ -181,6 +294,19 @@ function useMatchData() {
               return { ...prev, games, stage_name: msg.game_number === currentGame ? msg.stage_name : prev.stage_name };
             });
             setStageKey(k => k + 1);
+          } else if (msg.event === "overlay_settings") {
+            setSettings({
+              ribbon_mode:            msg.ribbon_mode            ?? "active",
+              open_lobby_match_type:  msg.open_lobby_match_type  ?? "open_battle",
+              open_lobby_stage:       msg.open_lobby_stage       ?? null,
+              open_lobby_mode_id:     msg.open_lobby_mode_id     ?? null,
+              open_lobby_mode_name:   msg.open_lobby_mode_name   ?? null,
+              open_lobby_stage_2:     msg.open_lobby_stage_2     ?? null,
+              open_lobby_mode_id_2:   msg.open_lobby_mode_id_2   ?? null,
+              open_lobby_mode_name_2: msg.open_lobby_mode_name_2 ?? null,
+              open_lobby_room_code:   msg.open_lobby_room_code   ?? null,
+              lobby_pool:             msg.lobby_pool             ?? null,
+            });
           }
         } catch { /* ignore */ }
       };
@@ -190,7 +316,7 @@ function useMatchData() {
     return () => { dead = true; ws?.close(); };
   }, [fetchMatch]);
 
-  return { match, scoreFlash, stageKey };
+  return { match, settings, scoreFlash, stageKey };
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
@@ -259,12 +385,14 @@ function MapPick({ stageName, stageKey, modeData, currentGame, bestOf }: {
             <span style={{ fontSize: "clamp(8px,1vw,11px)", color: "rgba(255,255,255,0.20)" }}>?</span>
           </div>
         )}
-        {/* Game label overlay */}
-        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "rgba(0,0,0,0.55)", padding: "1px 3px", textAlign: "center" }}>
-          <span style={{ fontSize: "clamp(6px,0.7vw,8px)", fontWeight: 800, color: "rgba(255,255,255,0.70)", letterSpacing: "0.12em" }}>
-            G{currentGame}{bestOf > 1 ? `/${bestOf}` : ""}
-          </span>
-        </div>
+        {/* Game label overlay — hidden in lobby mode (bestOf=0) */}
+        {bestOf > 0 && (
+          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "rgba(0,0,0,0.55)", padding: "1px 3px", textAlign: "center" }}>
+            <span style={{ fontSize: "clamp(6px,0.7vw,8px)", fontWeight: 800, color: "rgba(255,255,255,0.70)", letterSpacing: "0.12em" }}>
+              G{currentGame}{bestOf > 1 ? `/${bestOf}` : ""}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Stage name + mode */}
@@ -283,7 +411,31 @@ function MapPick({ stageName, stageKey, modeData, currentGame, bestOf }: {
   );
 }
 
-// ── Root export ───────────────────────────────────────────────────────────────
+// ── Map pool chips (desktop ribbon) ──────────────────────────────────────────
+
+function PoolChip({ entry }: { entry: PoolEntry }) {
+  const stageData = STAGES.find(s => s.name === entry.stageName);
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "0.4vw", flexShrink: 0 }}>
+      <div style={{ width: "clamp(44px,5vw,70px)", height: "clamp(17px,2.3vh,28px)", borderRadius: 4, overflow: "hidden", border: "1px solid rgba(255,255,255,0.10)", flexShrink: 0, position: "relative", background: "rgba(255,255,255,0.05)" }}>
+        {stageData && <img src={stageData.image} alt={entry.stageName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
+        <img src={entry.modeIcon} alt={entry.modeName} style={{ position: "absolute", bottom: 1, right: 2, width: "clamp(8px,0.85vw,11px)", height: "clamp(8px,0.85vw,11px)", objectFit: "contain", filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.9))" }} />
+      </div>
+      <span style={{ fontSize: "clamp(8px,0.9vw,11px)", fontWeight: 700, color: "rgba(255,255,255,0.72)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "clamp(54px,6.5vw,94px)" }}>
+        {entry.stageName}
+      </span>
+    </div>
+  );
+}
+
+function PoolStrip({ page, visible }: { page: PoolEntry[]; visible: boolean }) {
+  if (page.length === 0) return null;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "0.8vw", opacity: visible ? 1 : 0, transform: visible ? "translateY(0)" : "translateY(4px)", transition: `opacity ${POOL_FADE_MS}ms ease, transform ${POOL_FADE_MS}ms ease` }}>
+      {page.map((e) => <PoolChip key={`${e.modeId}-${e.stageName}`} entry={e} />)}
+    </div>
+  );
+}
 
 export default function OverlayRibbon() {
   useRibbonKeyframes();
@@ -294,8 +446,12 @@ export default function OverlayRibbon() {
     return () => document.body.classList.remove("overlay-mode");
   }, []);
 
-  const { match, scoreFlash, stageKey } = useMatchData();
+  const { match, settings, scoreFlash, stageKey } = useMatchData();
   const { slide, visible, total, idx } = useIdleSlide();
+
+  // Private battles have no map slots, so the pool ticker gets the extra room.
+  const isPrivate = settings.open_lobby_match_type === "private_battle";
+  const { page: poolPage, visible: poolVisible } = usePoolTicker(isPrivate ? 3 : 1);
 
   const [tickSignal,  setTickSignal]  = useState(0);
   const [tickVisible, setTickVisible] = useState(true);
@@ -314,8 +470,126 @@ export default function OverlayRibbon() {
     return () => clearInterval(t);
   }, [maxMembers]);
 
+  // ── Open Lobby ────────────────────────────────────────────────────────────
+  if (settings.ribbon_mode === "open_lobby") {
+    const lobbyCode  = settings.open_lobby_room_code;
+    const lobbyPool  = settings.lobby_pool;
+    const lobbyStage  = settings.open_lobby_stage;
+    const lobbyModeId = settings.open_lobby_mode_id;
+    const lobbyStage2  = settings.open_lobby_stage_2;
+    const lobbyModeId2 = settings.open_lobby_mode_id_2;
+    const stageData  = lobbyStage  ? STAGES.find(s => s.name === lobbyStage)  : null;
+    const modeData   = lobbyModeId ? MODES.find(m => m.id === lobbyModeId)   : null;
+    const stageData2 = lobbyStage2  ? STAGES.find(s => s.name === lobbyStage2)  : null;
+    const modeData2  = lobbyModeId2 ? MODES.find(m => m.id === lobbyModeId2)   : null;
+    const accentTop = isPrivate
+      ? "linear-gradient(to right, transparent, rgba(145,70,255,0.55) 30%, rgba(145,70,255,0.55) 70%, transparent)"
+      : "linear-gradient(to right, transparent, rgba(52,211,153,0.55) 30%, rgba(52,211,153,0.55) 70%, transparent)";
+
+    return (
+      <div
+        data-overlay
+        className="spl-ribbon-in"
+        style={{
+          width: "100%", height: "100%",
+          display: "flex", alignItems: "center",
+          gap: "1.6vw", padding: "0 2vw",
+          boxSizing: "border-box",
+          background: "rgba(6,6,18,0.93)",
+          backdropFilter: "blur(28px) saturate(160%)",
+          WebkitBackdropFilter: "blur(28px) saturate(160%)",
+          borderTop: isPrivate ? "1.5px solid rgba(145,70,255,0.40)" : "1.5px solid rgba(52,211,153,0.40)",
+          position: "relative", overflow: "hidden",
+        }}
+      >
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: accentTop, pointerEvents: "none" }} />
+        <div className="spl-ribbon-scan" style={{ position: "absolute", top: 0, left: 0, width: "8vw", height: "100%", background: isPrivate ? "linear-gradient(to right, transparent, rgba(145,70,255,0.10), transparent)" : "linear-gradient(to right, transparent, rgba(52,211,153,0.10), transparent)", pointerEvents: "none" }} />
+
+        {/* Logo */}
+        <div
+          className={isPrivate ? "spl-ribbon-private-glow" : "spl-ribbon-lobby-glow"}
+          style={{ width: "clamp(28px,4vh,44px)", height: "clamp(28px,4vh,44px)", borderRadius: "50%", overflow: "hidden", border: isPrivate ? "2px solid rgba(145,70,255,0.80)" : "2px solid rgba(52,211,153,0.80)", flexShrink: 0 }}
+        >
+          <img src="/android-chrome-512x512.png" alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        </div>
+
+        {/* Match type label */}
+        <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: "0.2vh" }}>
+          <span style={{ fontSize: "clamp(6px,0.72vw,9px)", fontWeight: 900, letterSpacing: "0.28em", textTransform: "uppercase", color: isPrivate ? "rgba(145,70,255,0.90)" : "rgba(52,211,153,0.90)", whiteSpace: "nowrap" }}>
+            {isPrivate ? "PRIVATE" : "ANARCHY"}
+          </span>
+          <span style={{ fontSize: "clamp(6px,0.65vw,8px)", fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(255,255,255,0.28)", whiteSpace: "nowrap" }}>
+            {isPrivate ? "BATTLE" : "OPEN"}
+          </span>
+        </div>
+
+        <Divider />
+
+        {/* Pool tag — what viewers type in-game to find the room */}
+        {lobbyPool && (
+          <>
+            <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: "0.15vh" }}>
+              <span style={{ fontSize: "clamp(6px,0.65vw,8px)", fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(255,255,255,0.25)" }}>POOL</span>
+              <span style={{ fontSize: "clamp(12px,1.8vw,22px)", fontWeight: 900, fontFamily: "'Courier New', Courier, monospace", color: isPrivate ? "rgb(196,150,255)" : "rgb(110,231,183)", letterSpacing: "0.06em", lineHeight: 1, whiteSpace: "nowrap" }}>{lobbyPool}</span>
+            </div>
+            <Divider />
+          </>
+        )}
+
+        {/* Room code */}
+        {lobbyCode && (
+          <>
+            <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: "0.15vh" }}>
+              <span style={{ fontSize: "clamp(6px,0.65vw,8px)", fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(255,255,255,0.25)" }}>ROOM CODE</span>
+              <span style={{ fontSize: "clamp(12px,1.8vw,22px)", fontWeight: 900, fontFamily: "'Courier New', Courier, monospace", color: "#fff", letterSpacing: "0.1em", lineHeight: 1 }}>{lobbyCode}</span>
+            </div>
+            <Divider />
+          </>
+        )}
+
+        {/* Open battle: two map slots */}
+        {!isPrivate && (stageData || modeData) && (
+          <>
+            <MapPick stageName={lobbyStage} stageKey={0} modeData={modeData} currentGame={1} bestOf={0} />
+            {(stageData2 || modeData2) && (
+              <>
+                <div style={{ width: 1, alignSelf: "stretch", margin: "0.9vh 0", background: "rgba(255,255,255,0.06)", flexShrink: 0 }} />
+                <MapPick stageName={lobbyStage2} stageKey={1} modeData={modeData2} currentGame={2} bestOf={0} />
+              </>
+            )}
+            <Divider />
+          </>
+        )}
+
+        {/* Tournament map pool ticker */}
+        {poolPage.length > 0 && (
+          <>
+            <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: "0.15vh", minWidth: 0 }}>
+              <span style={{ fontSize: "clamp(6px,0.65vw,8px)", fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(255,255,255,0.25)" }}>MAP POOL</span>
+              <PoolStrip page={poolPage} visible={poolVisible} />
+            </div>
+            <Divider />
+          </>
+        )}
+
+        {/* Filler so layout doesn't collapse */}
+        <div style={{ flex: 1 }} />
+
+        {/* How to join */}
+        <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.15vh" }}>
+          <span style={{ fontSize: "clamp(8px,0.9vw,10px)", fontWeight: 700, color: "rgba(255,255,255,0.38)", whiteSpace: "nowrap" }}>
+            {isPrivate ? "Enter the pool + code in-game to join" : "Search the pool in Anarchy Open to find the room"}
+          </span>
+          <span style={{ fontSize: "clamp(8px,0.9vw,10px)", fontWeight: 600, color: "rgba(255,255,255,0.20)", whiteSpace: "nowrap" }}>
+            {DISCORD}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   // ── Idle ──────────────────────────────────────────────────────────────────
-  if (!match) {
+  if (settings.ribbon_mode === "idle" || !match) {
     return (
       <div
         data-overlay

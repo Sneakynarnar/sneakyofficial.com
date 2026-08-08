@@ -311,8 +311,11 @@ class TwitchBot(commands.Bot):
 
     @commands.command(name="pool")
     async def cmd_pool(self, ctx: commands.Context) -> None:
-        channel = _ov.get().get("weapon_pool_channel") or "sneakyn"
-        await ctx.send(f"🎯 Pool: {channel}")
+        pool = _ov.get().get("lobby_pool")
+        if pool:
+            await ctx.send(f"🎯 Pool: {pool}")
+        else:
+            await ctx.send("🎯 (no pool set at the moment)")
 
     @commands.command(name="gg")
     async def cmd_gg(self, ctx: commands.Context) -> None:
