@@ -12,7 +12,7 @@ from interactions.api.events import MessageCreate
 
 logger = logging.getLogger("WaffleExt")
 
-MASTER_ID = 1535806604656640070
+MASTER_ID = 339866237922181121
 
 # Unicode waffle, plus any custom server emoji named something like :waffle:
 _UNICODE_WAFFLE = "\N{WAFFLE}"
