@@ -20,3 +20,6 @@ Thumbs.db
 .gemini/
 GEMINI.md
 graphify-out/
+
+# Runtime state (written by the app daily)
+src/backend/resources/weapon.txt

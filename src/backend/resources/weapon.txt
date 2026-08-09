@@ -1,1 +1,0 @@
-{"weapon": {"name": "Sloshing Machine", "game": "Splatoon 2"}, "date": "2026-08-08"}
