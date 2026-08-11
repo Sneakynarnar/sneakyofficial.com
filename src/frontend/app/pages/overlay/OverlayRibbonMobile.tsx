@@ -116,6 +116,16 @@ function useMobileKeyframes() {
       .mob-lobby-glow   { animation: mobLobbyPulse 2.4s ease-in-out infinite; }
       .mob-private-glow { animation: mobPrivatePulse 2.4s ease-in-out infinite; }
       .mob-scan         { animation: mobScan 4.5s ease-in-out infinite; }
+      @keyframes mobResetGlow {
+        0%, 100% { box-shadow: 0 0 8px rgba(56,189,248,0.45); }
+        50%      { box-shadow: 0 0 20px rgba(56,189,248,0.95), 0 0 42px rgba(56,189,248,0.35); }
+      }
+      @keyframes mobResetUrgent {
+        0%, 100% { box-shadow: 0 0 10px rgba(251,146,60,0.6); transform: scale(1); }
+        50%      { box-shadow: 0 0 26px rgba(251,146,60,1), 0 0 52px rgba(251,146,60,0.45); transform: scale(1.04); }
+      }
+      .mob-reset-glow   { animation: mobResetGlow 2.4s ease-in-out infinite; }
+      .mob-reset-urgent { animation: mobResetUrgent 1.1s ease-in-out infinite; }
       .mob-green-cycle {
         background: linear-gradient(90deg, rgba(16,185,129,0.8), rgba(52,211,153,0.8), rgba(16,185,129,0.8));
         background-size: 200% auto;
@@ -335,10 +345,12 @@ export default function OverlayRibbonMobile() {
         data-overlay
         className="mob-ribbon-in"
         style={{
-          width: "100%", height: "100%",
+          // Height hugs the content rather than filling the OBS source, so the
+          // bar is only as thick as it needs to be. Sizes scale on vw because
+          // the source is wide and short, which makes vh almost worthless here.
+          width: "100%", height: "auto",
           display: "flex", alignItems: "center",
-          // Tight vertical padding: the row is wide, so height is the scarce axis
-          padding: "clamp(5px,1.2vh,10px) clamp(10px,2.5vw,20px)",
+          padding: "clamp(4px,1vw,9px) clamp(8px,2vw,18px)",
           boxSizing: "border-box",
           background: "rgba(6,6,18,0.95)",
           backdropFilter: "blur(24px) saturate(160%)",
@@ -352,16 +364,16 @@ export default function OverlayRibbonMobile() {
         <div className="mob-scan" style={{ position: "absolute", top: 0, left: 0, width: "30vw", height: "100%", background: isPrivate ? "linear-gradient(to right, transparent, rgba(145,70,255,0.08), transparent)" : "linear-gradient(to right, transparent, rgba(52,211,153,0.08), transparent)", pointerEvents: "none" }} />
 
         {/* Logo */}
-        <div className={logoClass} style={{ width: "clamp(30px,7vw,46px)", height: "clamp(30px,7vw,46px)", borderRadius: "50%", overflow: "hidden", border: logoBorder, flexShrink: 0 }}>
+        <div className={logoClass} style={{ width: "clamp(22px,6vw,40px)", height: "clamp(22px,6vw,40px)", borderRadius: "50%", overflow: "hidden", border: logoBorder, flexShrink: 0 }}>
           <img src="/android-chrome-512x512.png" alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         </div>
 
         {/* Match type + how to join, stacked to keep the row short */}
-        <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: "clamp(1px,0.4vh,4px)", maxWidth: "22vw" }}>
-          <span style={{ fontSize: "clamp(8px,1.1vh,12px)", fontWeight: 800, letterSpacing: "0.18em", textTransform: "uppercase", color: labelColor, lineHeight: 1.1 }}>
+        <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: 1, maxWidth: "24vw" }}>
+          <span style={{ fontSize: "clamp(7px,1.7vw,11px)", fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: labelColor, lineHeight: 1.1 }}>
             {isPrivate ? "PRIVATE BATTLE" : "ANARCHY OPEN"}
           </span>
-          <span style={{ fontSize: "clamp(7px,1.5vw,10px)", fontWeight: 600, color: "rgba(255,255,255,0.38)", lineHeight: 1.2 }}>
+          <span style={{ fontSize: "clamp(6px,1.3vw,9px)", fontWeight: 600, color: "rgba(255,255,255,0.38)", lineHeight: 1.2 }}>
             {isPrivate ? "Enter the pool + code in-game" : "Search the pool in Anarchy Open"}
           </span>
         </div>
@@ -371,26 +383,26 @@ export default function OverlayRibbonMobile() {
           <div style={{
             flexShrink: 1, minWidth: 0,
             display: "flex", flexDirection: "column", gap: "clamp(0px,0.2vh,2px)",
-            padding: "clamp(3px,0.7vh,7px) clamp(7px,1.8vw,13px)",
-            borderRadius: 8,
+            padding: "clamp(2px,0.6vw,6px) clamp(5px,1.4vw,11px)",
+            borderRadius: 7,
             border: `2px solid ${labelColor}`,
             background: isPrivate ? "rgba(145,70,255,0.14)" : "rgba(52,211,153,0.14)",
           }}>
-            <span style={{ fontSize: "clamp(7px,0.95vh,11px)", fontWeight: 900, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(255,255,255,0.55)", lineHeight: 1 }}>POOL</span>
-            <span style={{ fontSize: "clamp(18px,4vh,34px)", fontWeight: 900, color: "#fff", lineHeight: 1.05, fontFamily: "'Courier New', Courier, monospace", letterSpacing: "0.02em", textShadow: isPrivate ? "0 0 18px rgba(145,70,255,0.8)" : "0 0 18px rgba(52,211,153,0.8)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lobbyPool}</span>
+            <span style={{ fontSize: "clamp(6px,1.4vw,10px)", fontWeight: 900, letterSpacing: "0.16em", textTransform: "uppercase", color: "rgba(255,255,255,0.55)", lineHeight: 1 }}>POOL</span>
+            <span style={{ fontSize: "clamp(14px,3.6vw,26px)", fontWeight: 900, color: "#fff", lineHeight: 1.05, fontFamily: "'Courier New', Courier, monospace", letterSpacing: "0.02em", textShadow: isPrivate ? "0 0 18px rgba(145,70,255,0.8)" : "0 0 18px rgba(52,211,153,0.8)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lobbyPool}</span>
           </div>
         )}
         {lobbyCode && (
           <div style={{
             flexShrink: 0,
             display: "flex", flexDirection: "column", gap: "clamp(0px,0.2vh,2px)",
-            padding: "clamp(3px,0.7vh,7px) clamp(7px,1.8vw,13px)",
-            borderRadius: 8,
+            padding: "clamp(2px,0.6vw,6px) clamp(5px,1.4vw,11px)",
+            borderRadius: 7,
             border: "2px solid rgba(255,255,255,0.55)",
             background: "rgba(255,255,255,0.10)",
           }}>
-            <span style={{ fontSize: "clamp(7px,0.95vh,11px)", fontWeight: 900, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(255,255,255,0.55)", lineHeight: 1 }}>ROOM CODE</span>
-            <span style={{ fontSize: "clamp(18px,4vh,34px)", fontWeight: 900, color: "#fff", lineHeight: 1.05, fontFamily: "'Courier New', Courier, monospace", letterSpacing: "0.08em" }}>{lobbyCode}</span>
+            <span style={{ fontSize: "clamp(6px,1.4vw,10px)", fontWeight: 900, letterSpacing: "0.16em", textTransform: "uppercase", color: "rgba(255,255,255,0.55)", lineHeight: 1 }}>ROOM CODE</span>
+            <span style={{ fontSize: "clamp(14px,3.6vw,26px)", fontWeight: 900, color: "#fff", lineHeight: 1.05, fontFamily: "'Courier New', Courier, monospace", letterSpacing: "0.08em" }}>{lobbyCode}</span>
           </div>
         )}
 
@@ -398,44 +410,48 @@ export default function OverlayRibbonMobile() {
         {isPrivate && rotationMode && (
           <>
             <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: "clamp(4px,1.2vw,9px)" }}>
-              <img src={rotationMode.icon} alt={rotationMode.name} style={{ width: "clamp(14px,2.8vh,22px)", height: "clamp(14px,2.8vh,22px)", objectFit: "contain", flexShrink: 0 }} />
+              <img src={rotationMode.icon} alt={rotationMode.name} style={{ width: "clamp(12px,2.6vw,20px)", height: "clamp(12px,2.6vw,20px)", objectFit: "contain", flexShrink: 0 }} />
               <span style={{ fontSize: "clamp(11px,1.9vh,17px)", fontWeight: 900, color: "#fff", lineHeight: 1.1, whiteSpace: "nowrap" }}>{rotationMode.name}</span>
             </div>
 
-            {/* Sized like the pool and code cards so it reads at a glance */}
-            <div style={{
-              flexShrink: 0,
-              display: "flex", alignItems: "center", gap: "clamp(5px,1.4vw,10px)",
-              padding: "clamp(3px,0.7vh,7px) clamp(7px,1.8vw,13px)",
-              borderRadius: 8,
-              border: isLastGame ? "2px solid rgba(251,146,60,0.95)" : "2px solid rgba(255,255,255,0.35)",
-              background: isLastGame ? "rgba(251,146,60,0.18)" : "rgba(255,255,255,0.07)",
-            }}>
+            {/* The loudest thing on the ribbon: viewers need to know how long
+                they have to get into this lobby before it is remade. */}
+            <div
+              className={isLastGame ? "mob-reset-urgent" : "mob-reset-glow"}
+              style={{
+                flexShrink: 0,
+                display: "flex", alignItems: "center", gap: "clamp(4px,1.1vw,9px)",
+                padding: "clamp(2px,0.6vw,6px) clamp(6px,1.6vw,12px)",
+                borderRadius: 7,
+                border: isLastGame ? "2px solid rgba(251,146,60,1)" : "2px solid rgba(56,189,248,0.85)",
+                background: isLastGame ? "rgba(251,146,60,0.22)" : "rgba(56,189,248,0.16)",
+              }}
+            >
               <span style={{
-                fontSize: "clamp(20px,4.4vh,38px)", fontWeight: 900, lineHeight: 1,
+                fontSize: "clamp(22px,7vw,50px)", fontWeight: 900, lineHeight: 0.95,
                 color: isLastGame ? "rgb(253,186,116)" : "#fff",
                 fontVariantNumeric: "tabular-nums",
-                textShadow: isLastGame ? "0 0 18px rgba(251,146,60,0.9)" : "none",
+                textShadow: isLastGame ? "0 0 20px rgba(251,146,60,1)" : "0 0 16px rgba(56,189,248,0.9)",
               }}>
                 {gamesLeft}
               </span>
-              <div style={{ display: "flex", flexDirection: "column", gap: "clamp(0px,0.2vh,2px)" }}>
-                <span style={{ fontSize: "clamp(8px,1.05vh,12px)", fontWeight: 900, letterSpacing: "0.16em", textTransform: "uppercase", color: "rgba(255,255,255,0.75)", lineHeight: 1, whiteSpace: "nowrap" }}>
-                  {gamesLeft === 1 ? "GAME LEFT" : "GAMES LEFT"}
+              <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                <span style={{ fontSize: "clamp(8px,2vw,14px)", fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#fff", lineHeight: 1.05, whiteSpace: "nowrap" }}>
+                  {gamesLeft === 1 ? "GAME TILL" : "GAMES TILL"}
                 </span>
-                <span style={{ fontSize: "clamp(7px,0.95vh,11px)", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: isLastGame ? "rgb(253,186,116)" : "rgba(255,255,255,0.40)", lineHeight: 1, whiteSpace: "nowrap" }}>
-                  {isLastGame ? "THEN LOBBY REMAKE" : "TILL LOBBY REMAKE"}
+                <span style={{ fontSize: "clamp(8px,2vw,14px)", fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: isLastGame ? "rgb(253,186,116)" : "rgb(125,211,252)", lineHeight: 1.05, whiteSpace: "nowrap" }}>
+                  LOBBY RESET
                 </span>
-              </div>
-              {/* One pip per game in the rotation, filled for the ones still to play */}
-              <div style={{ display: "flex", gap: "clamp(2px,0.5vw,4px)" }}>
-                {Array.from({ length: ROTATION_LENGTH }, (_, i) => (
-                  <div key={i} style={{
-                    width: "clamp(4px,0.9vh,7px)", height: "clamp(4px,0.9vh,7px)", borderRadius: 9999,
-                    background: i < gamesLeft ? (isLastGame ? "rgb(251,146,60)" : "rgba(255,255,255,0.85)") : "transparent",
-                    border: i < gamesLeft ? "none" : "1px solid rgba(255,255,255,0.25)",
-                  }} />
-                ))}
+                {/* One pip per game in the rotation, filled for those still to play */}
+                <div style={{ display: "flex", gap: "clamp(2px,0.5vw,4px)", marginTop: 1 }}>
+                  {Array.from({ length: ROTATION_LENGTH }, (_, i) => (
+                    <div key={i} style={{
+                      width: "clamp(4px,1vw,7px)", height: "clamp(4px,1vw,7px)", borderRadius: 9999,
+                      background: i < gamesLeft ? (isLastGame ? "rgb(251,146,60)" : "rgb(125,211,252)") : "transparent",
+                      border: i < gamesLeft ? "none" : "1px solid rgba(255,255,255,0.25)",
+                    }} />
+                  ))}
+                </div>
               </div>
             </div>
           </>
@@ -463,7 +479,7 @@ export default function OverlayRibbonMobile() {
             {(modeData || lobbyModeName) && (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "clamp(1px,0.3vh,3px)" }}>
                 {modeData && (
-                  <img src={modeData.icon} alt={modeData.name} style={{ width: "clamp(14px,2.8vh,22px)", height: "clamp(14px,2.8vh,22px)", objectFit: "contain" }} />
+                  <img src={modeData.icon} alt={modeData.name} style={{ width: "clamp(12px,2.6vw,20px)", height: "clamp(12px,2.6vw,20px)", objectFit: "contain" }} />
                 )}
                 <span style={{ fontSize: "clamp(7px,1.5vw,10px)", fontWeight: 800, color: "rgba(255,255,255,0.75)", whiteSpace: "nowrap", lineHeight: 1 }}>
                   {modeData ? modeData.name : lobbyModeName}
@@ -473,8 +489,8 @@ export default function OverlayRibbonMobile() {
             {[{ sd: stageData, name: lobbyStage }, { sd: stageData2, name: lobbyStage2 }]
               .filter(s => s.sd)
               .map((slot, i) => (
-                <div key={i} style={{ width: "clamp(52px,13vw,90px)", display: "flex", flexDirection: "column", alignItems: "center", gap: "clamp(1px,0.3vh,3px)" }}>
-                  <div style={{ position: "relative", width: "100%", height: "clamp(22px,4vh,34px)", borderRadius: 4, overflow: "hidden", border: "1px solid rgba(255,255,255,0.14)" }}>
+                <div key={i} style={{ width: "clamp(44px,11vw,78px)", display: "flex", flexDirection: "column", alignItems: "center", gap: "clamp(1px,0.3vh,3px)" }}>
+                  <div style={{ position: "relative", width: "100%", height: "clamp(16px,4.4vw,28px)", borderRadius: 4, overflow: "hidden", border: "1px solid rgba(255,255,255,0.14)" }}>
                     <img src={slot.sd!.image} alt={slot.name ?? ""} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   </div>
                   <span style={{ fontSize: "clamp(7px,1.5vw,10px)", fontWeight: 700, color: "rgba(255,255,255,0.75)", textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%", lineHeight: 1 }}>
