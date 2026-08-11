@@ -7,6 +7,7 @@ const GUILD_ID = import.meta.env.VITE_GUILD_ID ?? "";
 const DISCORD  = "discord.gg/gmJeQefe5X";
 // Games in the private battle rotation before the lobby is remade
 const ROTATION_LENGTH = 5;
+const PRIVATE_BATTLE_ICON = "/S2_Icon_Private_Battle.svg";
 
 function getWsUrl(): string {
   const base = (API_URL as string) || window.location.origin;
@@ -368,6 +369,20 @@ export default function OverlayRibbonMobile() {
           <img src="/android-chrome-512x512.png" alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         </div>
 
+        {/* Private battle mode icon */}
+        {isPrivate && (
+          <img
+            src={PRIVATE_BATTLE_ICON}
+            alt=""
+            style={{
+              width: "clamp(18px,4.5vw,32px)", height: "clamp(18px,4.5vw,32px)",
+              objectFit: "contain", flexShrink: 0,
+              // The icon's dark parts are nearly the ribbon's own background
+              filter: "drop-shadow(0 0 3px rgba(255,255,255,0.55))",
+            }}
+          />
+        )}
+
         {/* Match type + how to join, stacked to keep the row short */}
         <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: 1, maxWidth: "24vw" }}>
           <span style={{ fontSize: "clamp(7px,1.7vw,11px)", fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: labelColor, lineHeight: 1.1 }}>
@@ -414,44 +429,40 @@ export default function OverlayRibbonMobile() {
               <span style={{ fontSize: "clamp(11px,1.9vh,17px)", fontWeight: 900, color: "#fff", lineHeight: 1.1, whiteSpace: "nowrap" }}>{rotationMode.name}</span>
             </div>
 
-            {/* The loudest thing on the ribbon: viewers need to know how long
-                they have to get into this lobby before it is remade. */}
-            <div
-              className={isLastGame ? "mob-reset-urgent" : "mob-reset-glow"}
-              style={{
-                flexShrink: 0,
-                display: "flex", alignItems: "center", gap: "clamp(4px,1.1vw,9px)",
-                padding: "clamp(2px,0.6vw,6px) clamp(6px,1.6vw,12px)",
-                borderRadius: 7,
-                border: isLastGame ? "2px solid rgba(251,146,60,1)" : "2px solid rgba(56,189,248,0.85)",
-                background: isLastGame ? "rgba(251,146,60,0.22)" : "rgba(56,189,248,0.16)",
-              }}
-            >
+            {/* Sized like the pool and code cards so it reads at a glance */}
+            <div style={{
+              flexShrink: 0,
+              display: "flex", alignItems: "center", gap: "clamp(5px,1.4vw,10px)",
+              padding: "clamp(3px,0.7vh,7px) clamp(7px,1.8vw,13px)",
+              borderRadius: 8,
+              border: isLastGame ? "2px solid rgba(251,146,60,0.95)" : "2px solid rgba(255,255,255,0.35)",
+              background: isLastGame ? "rgba(251,146,60,0.18)" : "rgba(255,255,255,0.07)",
+            }}>
               <span style={{
-                fontSize: "clamp(22px,7vw,50px)", fontWeight: 900, lineHeight: 0.95,
+                fontSize: "clamp(20px,4.4vh,38px)", fontWeight: 900, lineHeight: 1,
                 color: isLastGame ? "rgb(253,186,116)" : "#fff",
                 fontVariantNumeric: "tabular-nums",
-                textShadow: isLastGame ? "0 0 20px rgba(251,146,60,1)" : "0 0 16px rgba(56,189,248,0.9)",
+                textShadow: isLastGame ? "0 0 18px rgba(251,146,60,0.9)" : "none",
               }}>
                 {gamesLeft}
               </span>
-              <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                <span style={{ fontSize: "clamp(8px,2vw,14px)", fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#fff", lineHeight: 1.05, whiteSpace: "nowrap" }}>
-                  {gamesLeft === 1 ? "GAME TILL" : "GAMES TILL"}
+              <div style={{ display: "flex", flexDirection: "column", gap: "clamp(0px,0.2vh,2px)" }}>
+                <span style={{ fontSize: "clamp(8px,1.05vh,12px)", fontWeight: 900, letterSpacing: "0.16em", textTransform: "uppercase", color: "rgba(255,255,255,0.75)", lineHeight: 1, whiteSpace: "nowrap" }}>
+                  {gamesLeft === 1 ? "GAME LEFT" : "GAMES LEFT"}
                 </span>
-                <span style={{ fontSize: "clamp(8px,2vw,14px)", fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: isLastGame ? "rgb(253,186,116)" : "rgb(125,211,252)", lineHeight: 1.05, whiteSpace: "nowrap" }}>
-                  LOBBY RESET
+                <span style={{ fontSize: "clamp(7px,0.95vh,11px)", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: isLastGame ? "rgb(253,186,116)" : "rgba(255,255,255,0.40)", lineHeight: 1, whiteSpace: "nowrap" }}>
+                  {isLastGame ? "THEN LOBBY REMAKE" : "TILL LOBBY REMAKE"}
                 </span>
-                {/* One pip per game in the rotation, filled for those still to play */}
-                <div style={{ display: "flex", gap: "clamp(2px,0.5vw,4px)", marginTop: 1 }}>
-                  {Array.from({ length: ROTATION_LENGTH }, (_, i) => (
-                    <div key={i} style={{
-                      width: "clamp(4px,1vw,7px)", height: "clamp(4px,1vw,7px)", borderRadius: 9999,
-                      background: i < gamesLeft ? (isLastGame ? "rgb(251,146,60)" : "rgb(125,211,252)") : "transparent",
-                      border: i < gamesLeft ? "none" : "1px solid rgba(255,255,255,0.25)",
-                    }} />
-                  ))}
-                </div>
+              </div>
+              {/* One pip per game in the rotation, filled for the ones still to play */}
+              <div style={{ display: "flex", gap: "clamp(2px,0.5vw,4px)" }}>
+                {Array.from({ length: ROTATION_LENGTH }, (_, i) => (
+                  <div key={i} style={{
+                    width: "clamp(4px,0.9vh,7px)", height: "clamp(4px,0.9vh,7px)", borderRadius: 9999,
+                    background: i < gamesLeft ? (isLastGame ? "rgb(251,146,60)" : "rgba(255,255,255,0.85)") : "transparent",
+                    border: i < gamesLeft ? "none" : "1px solid rgba(255,255,255,0.25)",
+                  }} />
+                ))}
               </div>
             </div>
           </>
