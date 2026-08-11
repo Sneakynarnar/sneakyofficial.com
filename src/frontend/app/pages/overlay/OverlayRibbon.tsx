@@ -11,14 +11,16 @@ const DISCORD  = "discord.gg/gmJeQefe5X";
 interface OverlaySettings {
   ribbon_mode: "idle" | "active" | "open_lobby";
   open_lobby_match_type: "open_battle" | "private_battle";
+  // Anarchy Open uses one mode across both maps
   open_lobby_stage: string | null;
   open_lobby_mode_id: string | null;
   open_lobby_mode_name: string | null;
   open_lobby_stage_2: string | null;
-  open_lobby_mode_id_2: string | null;
-  open_lobby_mode_name_2: string | null;
   open_lobby_room_code: string | null;
   lobby_pool: string | null;
+  // Private battle rotation
+  private_rotation_mode_id: string | null;
+  private_games_until_reset: number;
 }
 
 const DEFAULT_SETTINGS: OverlaySettings = {
@@ -28,11 +30,26 @@ const DEFAULT_SETTINGS: OverlaySettings = {
   open_lobby_mode_id: null,
   open_lobby_mode_name: null,
   open_lobby_stage_2: null,
-  open_lobby_mode_id_2: null,
-  open_lobby_mode_name_2: null,
   open_lobby_room_code: null,
   lobby_pool: null,
+  private_rotation_mode_id: null,
+  private_games_until_reset: 0,
 };
+
+function parseSettings(data: Record<string, unknown>): OverlaySettings {
+  return {
+    ribbon_mode:               (data.ribbon_mode as OverlaySettings["ribbon_mode"]) ?? "active",
+    open_lobby_match_type:     (data.open_lobby_match_type as OverlaySettings["open_lobby_match_type"]) ?? "open_battle",
+    open_lobby_stage:          (data.open_lobby_stage as string | null) ?? null,
+    open_lobby_mode_id:        (data.open_lobby_mode_id as string | null) ?? null,
+    open_lobby_mode_name:      (data.open_lobby_mode_name as string | null) ?? null,
+    open_lobby_stage_2:        (data.open_lobby_stage_2 as string | null) ?? null,
+    open_lobby_room_code:      (data.open_lobby_room_code as string | null) ?? null,
+    lobby_pool:                (data.lobby_pool as string | null) ?? null,
+    private_rotation_mode_id:  (data.private_rotation_mode_id as string | null) ?? null,
+    private_games_until_reset: (data.private_games_until_reset as number) ?? 0,
+  };
+}
 
 // ── Tournament map pool ticker ────────────────────────────────────────────────
 
@@ -243,18 +260,7 @@ function useMatchData() {
   const fetchSettings = useCallback(async () => {
     try {
       const { data } = await axios.get(`${API_URL}/api/tournament/overlay/settings`);
-      setSettings({
-        ribbon_mode:            data.ribbon_mode            ?? "active",
-        open_lobby_match_type:  data.open_lobby_match_type  ?? "open_battle",
-        open_lobby_stage:       data.open_lobby_stage       ?? null,
-        open_lobby_mode_id:     data.open_lobby_mode_id     ?? null,
-        open_lobby_mode_name:   data.open_lobby_mode_name   ?? null,
-        open_lobby_stage_2:     data.open_lobby_stage_2     ?? null,
-        open_lobby_mode_id_2:   data.open_lobby_mode_id_2   ?? null,
-        open_lobby_mode_name_2: data.open_lobby_mode_name_2 ?? null,
-        open_lobby_room_code:   data.open_lobby_room_code   ?? null,
-        lobby_pool:             data.lobby_pool             ?? null,
-      });
+      setSettings(parseSettings(data));
     } catch { /* ignore */ }
   }, []);
 
@@ -295,18 +301,7 @@ function useMatchData() {
             });
             setStageKey(k => k + 1);
           } else if (msg.event === "overlay_settings") {
-            setSettings({
-              ribbon_mode:            msg.ribbon_mode            ?? "active",
-              open_lobby_match_type:  msg.open_lobby_match_type  ?? "open_battle",
-              open_lobby_stage:       msg.open_lobby_stage       ?? null,
-              open_lobby_mode_id:     msg.open_lobby_mode_id     ?? null,
-              open_lobby_mode_name:   msg.open_lobby_mode_name   ?? null,
-              open_lobby_stage_2:     msg.open_lobby_stage_2     ?? null,
-              open_lobby_mode_id_2:   msg.open_lobby_mode_id_2   ?? null,
-              open_lobby_mode_name_2: msg.open_lobby_mode_name_2 ?? null,
-              open_lobby_room_code:   msg.open_lobby_room_code   ?? null,
-              lobby_pool:             msg.lobby_pool             ?? null,
-            });
+            setSettings(parseSettings(msg));
           }
         } catch { /* ignore */ }
       };
@@ -477,11 +472,14 @@ export default function OverlayRibbon() {
     const lobbyStage  = settings.open_lobby_stage;
     const lobbyModeId = settings.open_lobby_mode_id;
     const lobbyStage2  = settings.open_lobby_stage_2;
-    const lobbyModeId2 = settings.open_lobby_mode_id_2;
     const stageData  = lobbyStage  ? STAGES.find(s => s.name === lobbyStage)  : null;
     const modeData   = lobbyModeId ? MODES.find(m => m.id === lobbyModeId)   : null;
     const stageData2 = lobbyStage2  ? STAGES.find(s => s.name === lobbyStage2)  : null;
-    const modeData2  = lobbyModeId2 ? MODES.find(m => m.id === lobbyModeId2)   : null;
+    // Private battles follow the stream rotation instead of fixed map slots
+    const rotationMode = settings.private_rotation_mode_id
+      ? MODES.find(m => m.id === settings.private_rotation_mode_id)
+      : null;
+    const gamesLeft = settings.private_games_until_reset;
     const accentTop = isPrivate
       ? "linear-gradient(to right, transparent, rgba(145,70,255,0.55) 30%, rgba(145,70,255,0.55) 70%, transparent)"
       : "linear-gradient(to right, transparent, rgba(52,211,153,0.55) 30%, rgba(52,211,153,0.55) 70%, transparent)";
@@ -547,16 +545,37 @@ export default function OverlayRibbon() {
           </>
         )}
 
-        {/* Open battle: two map slots */}
+        {/* Anarchy Open: one mode across both maps */}
         {!isPrivate && (stageData || modeData) && (
           <>
             <MapPick stageName={lobbyStage} stageKey={0} modeData={modeData} currentGame={1} bestOf={0} />
-            {(stageData2 || modeData2) && (
+            {stageData2 && (
               <>
                 <div style={{ width: 1, alignSelf: "stretch", margin: "0.9vh 0", background: "rgba(255,255,255,0.06)", flexShrink: 0 }} />
-                <MapPick stageName={lobbyStage2} stageKey={1} modeData={modeData2} currentGame={2} bestOf={0} />
+                <MapPick stageName={lobbyStage2} stageKey={1} modeData={modeData} currentGame={2} bestOf={0} />
               </>
             )}
+            <Divider />
+          </>
+        )}
+
+        {/* Private battle: current rotation mode and games left before the remake */}
+        {isPrivate && rotationMode && (
+          <>
+            <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: "0.6vw" }}>
+              <img src={rotationMode.icon} alt={rotationMode.name} style={{ width: "clamp(16px,2.4vh,26px)", height: "clamp(16px,2.4vh,26px)", objectFit: "contain", flexShrink: 0 }} />
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.15vh" }}>
+                <span style={{ fontSize: "clamp(6px,0.65vw,8px)", fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(255,255,255,0.25)" }}>NOW PLAYING</span>
+                <span style={{ fontSize: "clamp(11px,1.3vw,18px)", fontWeight: 900, color: "#fff", lineHeight: 1, whiteSpace: "nowrap" }}>{rotationMode.name}</span>
+              </div>
+            </div>
+            <Divider />
+            <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: "0.15vh" }}>
+              <span style={{ fontSize: "clamp(6px,0.65vw,8px)", fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(255,255,255,0.25)" }}>TILL LOBBY RESET</span>
+              <span style={{ fontSize: "clamp(11px,1.3vw,18px)", fontWeight: 900, color: "rgb(196,150,255)", lineHeight: 1, whiteSpace: "nowrap" }}>
+                {gamesLeft <= 1 ? "LAST GAME" : `${gamesLeft} GAMES`}
+              </span>
+            </div>
             <Divider />
           </>
         )}

@@ -195,6 +195,8 @@ class WebServer:
             "/api/tournament/overlay/settings", self.sneaky_api.serve_overlay_settings)
         self.app.router.add_post(
             "/api/tournament/admin/overlay-settings", self.sneaky_api.tournament_admin_set_overlay_settings)
+        self.app.router.add_post(
+            "/api/tournament/admin/private-rotation", self.sneaky_api.tournament_admin_set_private_rotation)
         self.app.router.add_get(
             "/api/player/{discord_id}", self.sneaky_api.serve_player_profile)
         self.app.router.add_get(

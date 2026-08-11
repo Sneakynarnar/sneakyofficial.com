@@ -604,7 +604,7 @@ class SneakyApi:
 
     async def serve_overlay_settings(self, request: Request) -> web.Response:
         """Return current overlay/ribbon settings (public — used by the stream overlay)."""
-        return web.json_response(_ov.get())
+        return web.json_response(_ov.snapshot())
 
     @verify_tournament_admin
     async def tournament_admin_set_overlay_settings(self, request: Request, admin_id: int) -> web.Response:
@@ -625,13 +625,47 @@ class SneakyApi:
             "open_lobby_mode_id": body.get("open_lobby_mode_id") or None,
             "open_lobby_mode_name": body.get("open_lobby_mode_name") or None,
             "open_lobby_stage_2": body.get("open_lobby_stage_2") or None,
-            "open_lobby_mode_id_2": body.get("open_lobby_mode_id_2") or None,
-            "open_lobby_mode_name_2": body.get("open_lobby_mode_name_2") or None,
             "open_lobby_room_code": body.get("open_lobby_room_code") or None,
             "lobby_pool": (body.get("lobby_pool") or "").strip() or None,
         })
-        await TournamentBroadcaster.get().broadcast({"event": "overlay_settings", **_ov.get()})
-        return web.json_response({"ok": True})
+        if "private_rotation_index" in body:
+            try:
+                _ov.set_rotation_index(int(body["private_rotation_index"]))
+            except (TypeError, ValueError):
+                return web.json_response({"error": "Invalid private_rotation_index"}, status=400)
+        await TournamentBroadcaster.get().broadcast({"event": "overlay_settings", **_ov.snapshot()})
+        return web.json_response({"ok": True, **_ov.snapshot()})
+
+    @verify_tournament_admin
+    async def tournament_admin_set_private_rotation(self, request: Request, admin_id: int) -> web.Response:
+        """Move the private battle rotation along without touching the rest of the settings.
+
+        The stream runs Turf War → Splat Zones → Tower Control → Rainmaker →
+        Clam Blitz, then the lobby is remade, so the admin panel only needs to
+        nudge the position between games.
+        """
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"error": "Invalid JSON"}, status=400)
+
+        action = body.get("action", "next")
+        if action == "next":
+            _ov.advance_rotation(1)
+        elif action == "back":
+            _ov.advance_rotation(-1)
+        elif action == "reset":
+            _ov.set_rotation_index(0)
+        elif action == "set":
+            try:
+                _ov.set_rotation_index(int(body.get("index", 0)))
+            except (TypeError, ValueError):
+                return web.json_response({"error": "Invalid index"}, status=400)
+        else:
+            return web.json_response({"error": "Invalid action"}, status=400)
+
+        await TournamentBroadcaster.get().broadcast({"event": "overlay_settings", **_ov.snapshot()})
+        return web.json_response({"ok": True, **_ov.snapshot()})
 
     async def serve_overlay_data(self, request: Request) -> web.Response:
         """Return pinned match overlay data for the stream overlay."""

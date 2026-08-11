@@ -2637,19 +2637,22 @@ export function MapPoolPresetsSection({ tournamentId }: { tournamentId: number }
 type RibbonMode = "idle" | "active" | "open_lobby";
 type MatchType  = "open_battle" | "private_battle";
 
+// Stream rotation for private battles: one game of each, then the lobby is remade.
+const PRIVATE_ROTATION = ["turf_war", "splat_zones", "tower_control", "rainmaker", "clam_blitz"];
+
 export function OverlaySettingsSection() {
   const [open, setOpen]           = useState(false);
   const [ribbonMode, setRibbonMode] = useState<RibbonMode>("active");
   const [matchType, setMatchType] = useState<MatchType>("open_battle");
-  // Map slot 1
-  const [stage,  setStage]  = useState("");
+  // Anarchy Open runs one mode across both maps
   const [modeId, setModeId] = useState("");
-  // Map slot 2 (open battle)
-  const [stage2,  setStage2]  = useState("");
-  const [modeId2, setModeId2] = useState("");
+  const [stage,  setStage]  = useState("");
+  const [stage2, setStage2] = useState("");
   const [roomCode, setRoomCode]   = useState("");
   const [lobbyPool, setLobbyPool] = useState("sneakyn");
+  const [rotationIndex, setRotationIndex] = useState(0);
   const [saving, setSaving]       = useState(false);
+  const [rotating, setRotating]   = useState(false);
   const [msg, setMsg]             = useState<{ text: string; ok: boolean } | null>(null);
   const [loaded, setLoaded]       = useState(false);
 
@@ -2662,17 +2665,16 @@ export function OverlaySettingsSection() {
       setStage(data.open_lobby_stage ?? "");
       setModeId(data.open_lobby_mode_id ?? "");
       setStage2(data.open_lobby_stage_2 ?? "");
-      setModeId2(data.open_lobby_mode_id_2 ?? "");
       setRoomCode(data.open_lobby_room_code ?? "");
       setLobbyPool(data.lobby_pool ?? "");
+      setRotationIndex(data.private_rotation_index ?? 0);
       setLoaded(true);
     } catch { /* best-effort */ }
   }, [loaded]);
 
   const save = async () => {
     setSaving(true);
-    const modeName  = MODES.find((m) => m.id === modeId)?.name  ?? null;
-    const modeName2 = MODES.find((m) => m.id === modeId2)?.name ?? null;
+    const modeName = MODES.find((m) => m.id === modeId)?.name ?? null;
     const isOpen = matchType === "open_battle";
     try {
       const { data } = await axios.post(
@@ -2680,12 +2682,10 @@ export function OverlaySettingsSection() {
         {
           ribbon_mode: ribbonMode,
           open_lobby_match_type: matchType,
-          open_lobby_stage:      isOpen ? (stage  || null) : null,
-          open_lobby_mode_id:    isOpen ? (modeId || null) : null,
-          open_lobby_mode_name:  isOpen ? modeName          : null,
-          open_lobby_stage_2:    isOpen ? (stage2  || null) : null,
-          open_lobby_mode_id_2:  isOpen ? (modeId2 || null) : null,
-          open_lobby_mode_name_2: isOpen ? modeName2        : null,
+          open_lobby_mode_id:   isOpen ? (modeId || null) : null,
+          open_lobby_mode_name: isOpen ? modeName         : null,
+          open_lobby_stage:     isOpen ? (stage  || null) : null,
+          open_lobby_stage_2:   isOpen ? (stage2 || null) : null,
           open_lobby_room_code: roomCode || null,
           lobby_pool: lobbyPool.trim() || null,
         },
@@ -2699,6 +2699,31 @@ export function OverlaySettingsSection() {
       setTimeout(() => setMsg(null), 3000);
     }
   };
+
+  // Rotation buttons apply straight away — no Save needed between games.
+  const rotate = async (action: "next" | "back" | "reset" | "set", index?: number) => {
+    setRotating(true);
+    try {
+      const { data } = await axios.post(
+        `${API_URL}/api/tournament/admin/private-rotation`,
+        { action, index },
+        { withCredentials: true },
+      );
+      if (data.ok) {
+        setRotationIndex(data.private_rotation_index ?? 0);
+      } else {
+        setMsg({ text: data.error ?? "Failed", ok: false });
+        setTimeout(() => setMsg(null), 3000);
+      }
+    } catch {
+      setMsg({ text: "Failed to update rotation.", ok: false });
+      setTimeout(() => setMsg(null), 3000);
+    } finally {
+      setRotating(false);
+    }
+  };
+
+  const gamesUntilReset = PRIVATE_ROTATION.length - rotationIndex;
 
   const MODES_LABELS: { id: RibbonMode; label: string; hint: string }[] = [
     { id: "idle",       label: "Idle",         hint: "Forces idle slides regardless of match state." },
@@ -2774,78 +2799,121 @@ export function OverlaySettingsSection() {
                 </div>
                 <p className="text-[11px] text-slate-600 mt-1.5">
                   {matchType === "open_battle"
-                    ? "Viewers search the pool in Anarchy Open. Set the maps below to show them on the ribbon."
+                    ? "Viewers search the pool in Anarchy Open. Set the mode and its two maps below to show them on the ribbon."
                     : "Viewers enter the pool and room code in-game. Host picks the maps."}
                 </p>
               </div>
 
-              {/* Open Battle: two map + mode slots */}
+              {/* Anarchy Open: one mode, two maps */}
               {matchType === "open_battle" && (
                 <div className="flex flex-col gap-2">
-                  {/* Slot 1 */}
-                  <div>
-                    <p className="text-[10px] text-slate-600 uppercase tracking-wide mb-1">Map 1</p>
-                    <div className="flex gap-2 flex-wrap">
-                      <div className="flex flex-col gap-1 flex-1 min-w-[130px]">
-                        <label className="text-[11px] text-slate-500 uppercase tracking-wide">Mode</label>
-                        <select
-                          value={modeId}
-                          onChange={(e) => setModeId(e.target.value)}
-                          className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-purple-500"
-                        >
-                          <option value="">— not set —</option>
-                          {MODES.map((m) => (
-                            <option key={m.id} value={m.id}>{m.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
-                        <label className="text-[11px] text-slate-500 uppercase tracking-wide">Stage</label>
-                        <select
-                          value={stage}
-                          onChange={(e) => setStage(e.target.value)}
-                          className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-purple-500"
-                        >
-                          <option value="">— not set —</option>
-                          {STAGES.map((s) => (
-                            <option key={s.name} value={s.name}>{s.name}</option>
-                          ))}
-                        </select>
-                      </div>
+                  <div className="flex flex-col gap-1 max-w-[220px]">
+                    <label className="text-[11px] text-slate-500 uppercase tracking-wide">Mode</label>
+                    <select
+                      value={modeId}
+                      onChange={(e) => setModeId(e.target.value)}
+                      className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-purple-500"
+                    >
+                      <option value="">— not set —</option>
+                      {MODES.map((m) => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-slate-600">Anarchy runs one mode across both maps.</p>
+                  </div>
+                  <div className="flex gap-2 flex-wrap">
+                    <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
+                      <label className="text-[11px] text-slate-500 uppercase tracking-wide">Map 1</label>
+                      <select
+                        value={stage}
+                        onChange={(e) => setStage(e.target.value)}
+                        className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-purple-500"
+                      >
+                        <option value="">— not set —</option>
+                        {STAGES.map((s) => (
+                          <option key={s.name} value={s.name}>{s.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
+                      <label className="text-[11px] text-slate-500 uppercase tracking-wide">Map 2</label>
+                      <select
+                        value={stage2}
+                        onChange={(e) => setStage2(e.target.value)}
+                        className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-purple-500"
+                      >
+                        <option value="">— not set —</option>
+                        {STAGES.map((s) => (
+                          <option key={s.name} value={s.name}>{s.name}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
-                  {/* Slot 2 */}
-                  <div>
-                    <p className="text-[10px] text-slate-600 uppercase tracking-wide mb-1">Map 2</p>
-                    <div className="flex gap-2 flex-wrap">
-                      <div className="flex flex-col gap-1 flex-1 min-w-[130px]">
-                        <label className="text-[11px] text-slate-500 uppercase tracking-wide">Mode</label>
-                        <select
-                          value={modeId2}
-                          onChange={(e) => setModeId2(e.target.value)}
-                          className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-purple-500"
+                </div>
+              )}
+
+              {/* Private battle: mode rotation and lobby reset counter */}
+              {matchType === "private_battle" && (
+                <div className="flex flex-col gap-2">
+                  <p className="text-[11px] text-slate-500 uppercase tracking-wide font-semibold">Rotation</p>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {PRIVATE_ROTATION.map((id, i) => {
+                      const mode = MODES.find((m) => m.id === id);
+                      const done = i < rotationIndex;
+                      const current = i === rotationIndex;
+                      return (
+                        <button
+                          key={id}
+                          onClick={() => rotate("set", i)}
+                          disabled={rotating}
+                          title="Jump to this game"
+                          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium border transition-colors disabled:opacity-50 ${
+                            current
+                              ? "bg-purple-600 border-purple-400 text-white"
+                              : done
+                                ? "bg-slate-800/80 border-slate-700/50 text-slate-600 line-through"
+                                : "bg-slate-700/60 border-slate-600/50 text-slate-400 hover:text-slate-200"
+                          }`}
                         >
-                          <option value="">— not set —</option>
-                          {MODES.map((m) => (
-                            <option key={m.id} value={m.id}>{m.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
-                        <label className="text-[11px] text-slate-500 uppercase tracking-wide">Stage</label>
-                        <select
-                          value={stage2}
-                          onChange={(e) => setStage2(e.target.value)}
-                          className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-purple-500"
-                        >
-                          <option value="">— not set —</option>
-                          {STAGES.map((s) => (
-                            <option key={s.name} value={s.name}>{s.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
+                          {mode && <img src={mode.icon} alt="" className="w-3.5 h-3.5 object-contain" />}
+                          {mode?.name ?? id}
+                        </button>
+                      );
+                    })}
                   </div>
+
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <div className="px-3 py-2 rounded border border-purple-600/40 bg-purple-900/30">
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wide">Games till lobby reset</p>
+                      <p className="text-xl font-black text-purple-200 leading-tight">{gamesUntilReset}</p>
+                    </div>
+                    <button
+                      onClick={() => rotate("next")}
+                      disabled={rotating}
+                      className="px-3 py-2 rounded text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white disabled:opacity-50"
+                    >
+                      Game done →
+                    </button>
+                    <button
+                      onClick={() => rotate("back")}
+                      disabled={rotating}
+                      className="px-3 py-2 rounded text-xs font-medium bg-slate-700/60 border border-slate-600/50 text-slate-300 hover:text-white disabled:opacity-50"
+                    >
+                      ← Back
+                    </button>
+                    <button
+                      onClick={() => rotate("reset")}
+                      disabled={rotating}
+                      className="px-3 py-2 rounded text-xs font-medium bg-green-700/70 border border-green-500/50 text-white hover:bg-green-600/70 disabled:opacity-50"
+                    >
+                      Lobby remade — restart
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-600">
+                    Turf War → Splat Zones → Tower Control → Rainmaker → Clam Blitz, then remake the lobby.
+                    These buttons apply straight away, no need to press Save.
+                  </p>
                 </div>
               )}
 
