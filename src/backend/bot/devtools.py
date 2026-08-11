@@ -15,7 +15,7 @@ from interactions.api.events import CommandError, CommandCompletion, Startup, Di
 from backend.util import global_config
 from version import __version__
 
-logger = logging.getLogger("OCE-4Mans")
+logger = logging.getLogger("DevTools")
 
 
 class DevTools(interactions.Extension):

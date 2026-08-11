@@ -20,7 +20,7 @@ from interactions import (
 )
 from interactions.api.events import MemberAdd, Startup
 
-logger = logging.getLogger("OCE-4Mans")
+logger = logging.getLogger("WelcomeExt")
 
 GUILD_ID = 1019293451579293747
 WELCOME_CHANNEL_ID = 1019293452451725384

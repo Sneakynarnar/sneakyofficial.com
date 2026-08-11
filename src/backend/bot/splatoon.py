@@ -18,7 +18,7 @@ from interactions import slash_command, slash_option, OptionType, SlashCommandCh
 from interactions.api.events import Startup
 from backend.util import global_config
 
-logger = logging.getLogger("OCE-4Mans")
+logger = logging.getLogger("SplatoonExt")
 
 
 class Splatoon(interactions.Extension):
