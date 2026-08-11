@@ -5,8 +5,6 @@ import { MODES, STAGES } from "../../components/tournament/splatoonData";
 const API_URL  = import.meta.env.VITE_API_URL  ?? "";
 const GUILD_ID = import.meta.env.VITE_GUILD_ID ?? "";
 const DISCORD  = "discord.gg/gmJeQefe5X";
-// Games in the private battle rotation before the lobby is remade
-const ROTATION_LENGTH = 5;
 const PRIVATE_BATTLE_ICON = "/S2_Icon_Private_Battle.svg";
 const ANARCHY_OPEN_ICON   = "/S2_Icon_Ranked_Battle.svg";
 
@@ -118,16 +116,19 @@ function useMobileKeyframes() {
       .mob-lobby-glow   { animation: mobLobbyPulse 2.4s ease-in-out infinite; }
       .mob-private-glow { animation: mobPrivatePulse 2.4s ease-in-out infinite; }
       .mob-scan         { animation: mobScan 4.5s ease-in-out infinite; }
-      @keyframes mobResetGlow {
-        0%, 100% { box-shadow: 0 0 8px rgba(56,189,248,0.45); }
-        50%      { box-shadow: 0 0 20px rgba(56,189,248,0.95), 0 0 42px rgba(56,189,248,0.35); }
+      @keyframes mobResetFlash {
+        0%, 100% {
+          background: rgba(251,146,60,0.16);
+          border-color: rgba(251,146,60,0.55);
+          box-shadow: 0 0 6px rgba(251,146,60,0.35);
+        }
+        50% {
+          background: rgba(251,146,60,0.55);
+          border-color: rgba(251,146,60,1);
+          box-shadow: 0 0 24px rgba(251,146,60,1), 0 0 50px rgba(251,146,60,0.45);
+        }
       }
-      @keyframes mobResetUrgent {
-        0%, 100% { box-shadow: 0 0 10px rgba(251,146,60,0.6); transform: scale(1); }
-        50%      { box-shadow: 0 0 26px rgba(251,146,60,1), 0 0 52px rgba(251,146,60,0.45); transform: scale(1.04); }
-      }
-      .mob-reset-glow   { animation: mobResetGlow 2.4s ease-in-out infinite; }
-      .mob-reset-urgent { animation: mobResetUrgent 1.1s ease-in-out infinite; }
+      .mob-reset-flash { animation: mobResetFlash 1s ease-in-out infinite; }
       .mob-green-cycle {
         background: linear-gradient(90deg, rgba(16,185,129,0.8), rgba(52,211,153,0.8), rgba(16,185,129,0.8));
         background-size: 200% auto;
@@ -395,7 +396,8 @@ export default function OverlayRibbonMobile() {
         {/* Pool tag + room code, the two things viewers actually need to read */}
         {lobbyPool && (
           <div style={{
-            flexShrink: 1, minWidth: 0,
+            // Never shrink: a truncated pool tag is useless to a viewer
+            flexShrink: 0,
             display: "flex", flexDirection: "column", gap: "clamp(0px,0.2vh,2px)",
             padding: "clamp(2px,0.6vw,6px) clamp(5px,1.4vw,11px)",
             borderRadius: 7,
@@ -403,7 +405,7 @@ export default function OverlayRibbonMobile() {
             background: isPrivate ? "rgba(145,70,255,0.14)" : "rgba(52,211,153,0.14)",
           }}>
             <span style={{ fontSize: "clamp(6px,1.4vw,10px)", fontWeight: 900, letterSpacing: "0.16em", textTransform: "uppercase", color: "rgba(255,255,255,0.55)", lineHeight: 1 }}>POOL</span>
-            <span style={{ fontSize: "clamp(14px,3.6vw,26px)", fontWeight: 900, color: "#fff", lineHeight: 1.05, fontFamily: "'Courier New', Courier, monospace", letterSpacing: "0.02em", textShadow: isPrivate ? "0 0 18px rgba(145,70,255,0.8)" : "0 0 18px rgba(52,211,153,0.8)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lobbyPool}</span>
+            <span style={{ fontSize: "clamp(14px,3.6vw,26px)", fontWeight: 900, color: "#fff", lineHeight: 1.05, fontFamily: "'Courier New', Courier, monospace", letterSpacing: "0.02em", textShadow: isPrivate ? "0 0 18px rgba(145,70,255,0.8)" : "0 0 18px rgba(52,211,153,0.8)", whiteSpace: "nowrap" }}>{lobbyPool}</span>
           </div>
         )}
         {lobbyCode && (
@@ -428,15 +430,20 @@ export default function OverlayRibbonMobile() {
               <span style={{ fontSize: "clamp(11px,1.9vh,17px)", fontWeight: 900, color: "#fff", lineHeight: 1.1, whiteSpace: "nowrap" }}>{rotationMode.name}</span>
             </div>
 
-            {/* Sized like the pool and code cards so it reads at a glance */}
-            <div style={{
-              flexShrink: 0,
-              display: "flex", alignItems: "center", gap: "clamp(5px,1.4vw,10px)",
-              padding: "clamp(3px,0.7vh,7px) clamp(7px,1.8vw,13px)",
-              borderRadius: 8,
-              border: isLastGame ? "2px solid rgba(251,146,60,0.95)" : "2px solid rgba(255,255,255,0.35)",
-              background: isLastGame ? "rgba(251,146,60,0.18)" : "rgba(255,255,255,0.07)",
-            }}>
+            {/* Sized like the pool and code cards so it reads at a glance.
+                On the last game it flashes orange so nobody joins a lobby
+                that is about to be remade. */}
+            <div
+              className={isLastGame ? "mob-reset-flash" : undefined}
+              style={{
+                flexShrink: 0,
+                display: "flex", alignItems: "center", gap: "clamp(5px,1.4vw,10px)",
+                padding: "clamp(3px,0.7vh,7px) clamp(7px,1.8vw,13px)",
+                borderRadius: 8,
+                border: isLastGame ? "2px solid rgba(251,146,60,0.95)" : "2px solid rgba(255,255,255,0.35)",
+                background: isLastGame ? "rgba(251,146,60,0.18)" : "rgba(255,255,255,0.07)",
+              }}
+            >
               <span style={{
                 fontSize: "clamp(20px,4.4vh,38px)", fontWeight: 900, lineHeight: 1,
                 color: isLastGame ? "rgb(253,186,116)" : "#fff",
@@ -452,16 +459,6 @@ export default function OverlayRibbonMobile() {
                 <span style={{ fontSize: "clamp(7px,0.95vh,11px)", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: isLastGame ? "rgb(253,186,116)" : "rgba(255,255,255,0.40)", lineHeight: 1, whiteSpace: "nowrap" }}>
                   {isLastGame ? "THEN LOBBY REMAKE" : "TILL LOBBY REMAKE"}
                 </span>
-              </div>
-              {/* One pip per game in the rotation, filled for the ones still to play */}
-              <div style={{ display: "flex", gap: "clamp(2px,0.5vw,4px)" }}>
-                {Array.from({ length: ROTATION_LENGTH }, (_, i) => (
-                  <div key={i} style={{
-                    width: "clamp(4px,0.9vh,7px)", height: "clamp(4px,0.9vh,7px)", borderRadius: 9999,
-                    background: i < gamesLeft ? (isLastGame ? "rgb(251,146,60)" : "rgba(255,255,255,0.85)") : "transparent",
-                    border: i < gamesLeft ? "none" : "1px solid rgba(255,255,255,0.25)",
-                  }} />
-                ))}
               </div>
             </div>
           </>

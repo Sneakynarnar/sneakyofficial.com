@@ -5,8 +5,6 @@ import { MODES, STAGES } from "../../components/tournament/splatoonData";
 const API_URL  = import.meta.env.VITE_API_URL  ?? "";
 const GUILD_ID = import.meta.env.VITE_GUILD_ID ?? "";
 const DISCORD  = "discord.gg/gmJeQefe5X";
-// Games in the private battle rotation before the lobby is remade
-const ROTATION_LENGTH = 5;
 const PRIVATE_BATTLE_ICON = "/S2_Icon_Private_Battle.svg";
 const ANARCHY_OPEN_ICON   = "/S2_Icon_Ranked_Battle.svg";
 
@@ -235,6 +233,19 @@ function useRibbonKeyframes() {
       }
       .spl-ribbon-lobby-glow   { animation: splRibbonLobbyPulse 2.4s ease-in-out infinite; }
       .spl-ribbon-private-glow { animation: splRibbonPrivatePulse 2.4s ease-in-out infinite; }
+      @keyframes splResetFlash {
+        0%, 100% {
+          background: rgba(251,146,60,0.16);
+          border-color: rgba(251,146,60,0.55);
+          box-shadow: 0 0 6px rgba(251,146,60,0.35);
+        }
+        50% {
+          background: rgba(251,146,60,0.55);
+          border-color: rgba(251,146,60,1);
+          box-shadow: 0 0 22px rgba(251,146,60,1), 0 0 46px rgba(251,146,60,0.45);
+        }
+      }
+      .spl-reset-flash { animation: splResetFlash 1s ease-in-out infinite; }
       .spl-ribbon-green-cycle {
         background: linear-gradient(90deg, rgba(16,185,129,0.65), rgba(52,211,153,0.65), rgba(16,185,129,0.65));
         background-size: 200% auto;
@@ -586,13 +597,17 @@ export default function OverlayRibbon() {
               </div>
             </div>
             <Divider />
-            {/* Countdown to the remake, boxed so it reads at a glance */}
-            <div style={{
-              flexShrink: 0, display: "flex", alignItems: "center", gap: "0.5vw",
-              padding: "0.5vh 0.7vw", borderRadius: 6,
-              border: gamesLeft <= 1 ? "1.5px solid rgba(251,146,60,0.95)" : "1.5px solid rgba(255,255,255,0.30)",
-              background: gamesLeft <= 1 ? "rgba(251,146,60,0.18)" : "rgba(255,255,255,0.06)",
-            }}>
+            {/* Countdown to the remake, boxed so it reads at a glance. It
+                flashes orange on the last game before the lobby is remade. */}
+            <div
+              className={gamesLeft <= 1 ? "spl-reset-flash" : undefined}
+              style={{
+                flexShrink: 0, display: "flex", alignItems: "center", gap: "0.5vw",
+                padding: "0.5vh 0.7vw", borderRadius: 6,
+                border: gamesLeft <= 1 ? "1.5px solid rgba(251,146,60,0.95)" : "1.5px solid rgba(255,255,255,0.30)",
+                background: gamesLeft <= 1 ? "rgba(251,146,60,0.18)" : "rgba(255,255,255,0.06)",
+              }}
+            >
               <span style={{
                 fontSize: "clamp(16px,2vw,30px)", fontWeight: 900, lineHeight: 1,
                 fontVariantNumeric: "tabular-nums",
@@ -608,15 +623,6 @@ export default function OverlayRibbon() {
                 <span style={{ fontSize: "clamp(6px,0.65vw,8px)", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: gamesLeft <= 1 ? "rgb(253,186,116)" : "rgba(255,255,255,0.35)", whiteSpace: "nowrap" }}>
                   {gamesLeft <= 1 ? "THEN LOBBY REMAKE" : "TILL LOBBY REMAKE"}
                 </span>
-              </div>
-              <div style={{ display: "flex", gap: "0.25vw" }}>
-                {Array.from({ length: ROTATION_LENGTH }, (_, i) => (
-                  <div key={i} style={{
-                    width: "clamp(4px,0.45vw,7px)", height: "clamp(4px,0.45vw,7px)", borderRadius: 9999,
-                    background: i < gamesLeft ? (gamesLeft <= 1 ? "rgb(251,146,60)" : "rgba(255,255,255,0.85)") : "transparent",
-                    border: i < gamesLeft ? "none" : "1px solid rgba(255,255,255,0.25)",
-                  }} />
-                ))}
               </div>
             </div>
             <Divider />

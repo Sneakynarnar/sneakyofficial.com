@@ -246,8 +246,13 @@ class WebServer:
         self.app.router.add_static(
             "/images", path=images_dir, show_index=True)
 
-        self.app.router.add_get("/{filename:favicon\\.ico|.*\\.jpg|.*\\.png|.*\\.css|.*\\.js|.*\\.txt|.*\\.xml}",
-                                self.serve_static_file)
+        # Anything not listed here falls through to the SPA catch-all and comes
+        # back as index.html, which shows up as a broken image or asset.
+        self.app.router.add_get(
+            "/{filename:favicon\\.ico|.*\\.jpg|.*\\.jpeg|.*\\.png|.*\\.svg|.*\\.webp|.*\\.gif|"
+            ".*\\.ico|.*\\.css|.*\\.js|.*\\.json|.*\\.txt|.*\\.xml|.*\\.webmanifest|"
+            ".*\\.woff|.*\\.woff2}",
+            self.serve_static_file)
         self.app.router.add_get("/{tail:.*}", self.serve_index)
         for route in list(self.app.router.routes()):
             self.cors.add(route)
