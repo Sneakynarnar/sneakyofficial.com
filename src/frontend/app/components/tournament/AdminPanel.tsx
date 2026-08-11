@@ -2957,6 +2957,114 @@ export function OverlaySettingsSection() {
   );
 }
 
+// ---- Splatdle activity section -------------------------------------------
+
+interface SplatdleActivity {
+  playing_now: number;
+  sessions_today: number;
+  peak_today: number;
+  peak_at: string | null;
+  active_window_seconds: number;
+  completed_today: number | null;
+  registered_players: number | null;
+  average_guesses_today: number | null;
+}
+
+export function SplatdleActivitySection() {
+  const [data, setData] = useState<SplatdleActivity | null>(null);
+  const [error, setError] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API_URL}/api/splatdle/activity`, { withCredentials: true });
+      setData(res.data);
+      setError(false);
+      setUpdatedAt(new Date());
+    } catch {
+      setError(true);
+    }
+  }, []);
+
+  // Poll often enough that the live count feels live without hammering the API.
+  useEffect(() => {
+    load();
+    const timer = setInterval(load, 15_000);
+    return () => clearInterval(timer);
+  }, [load]);
+
+  if (error && !data) {
+    return <p className="text-xs text-red-300">Could not load Splatdle activity.</p>;
+  }
+  if (!data) {
+    return <p className="text-xs text-slate-500">Loading…</p>;
+  }
+
+  const tiles: { label: string; value: string; hint: string; accent: string }[] = [
+    {
+      label: "Playing now",
+      value: String(data.playing_now),
+      hint: `Tabs open in the last ${data.active_window_seconds}s`,
+      accent: "text-green-300 border-green-600/40 bg-green-900/20",
+    },
+    {
+      label: "Players today",
+      value: String(data.sessions_today),
+      hint: "Unique browsers since the UTC reset",
+      accent: "text-purple-200 border-purple-600/40 bg-purple-900/20",
+    },
+    {
+      label: "Peak today",
+      value: String(data.peak_today),
+      hint: data.peak_at ? `At ${new Date(data.peak_at).toLocaleTimeString()}` : "No traffic yet",
+      accent: "text-blue-200 border-blue-600/40 bg-blue-900/20",
+    },
+    {
+      label: "Finished today",
+      value: data.completed_today === null ? "?" : String(data.completed_today),
+      hint: "Logged in players who got the weapon",
+      accent: "text-amber-200 border-amber-600/40 bg-amber-900/20",
+    },
+  ];
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {tiles.map((t) => (
+          <div key={t.label} className={`rounded-lg border p-3 ${t.accent}`}>
+            <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">{t.label}</p>
+            <p className="text-2xl font-black leading-tight">{t.value}</p>
+            <p className="text-[10px] text-slate-500 mt-0.5">{t.hint}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+        <span>
+          Registered players: <span className="text-slate-300 font-semibold">{data.registered_players ?? "?"}</span>
+        </span>
+        <span>
+          Average guesses today:{" "}
+          <span className="text-slate-300 font-semibold">
+            {data.average_guesses_today === null ? "no wins yet" : data.average_guesses_today.toFixed(2)}
+          </span>
+        </span>
+        <button
+          onClick={load}
+          className="ml-auto flex items-center gap-1 px-2 py-1 rounded bg-slate-700/60 border border-slate-600/50 text-slate-300 hover:text-white"
+        >
+          <RefreshCw className="w-3 h-3" /> Refresh
+        </button>
+      </div>
+
+      <p className="text-[11px] text-slate-600">
+        Live counts come from the page itself, so they include players who are not logged in and reset when the
+        backend restarts. Updated {updatedAt ? updatedAt.toLocaleTimeString() : "never"}, and every 15s.
+      </p>
+    </div>
+  );
+}
+
 function AdminTwitchIcon() {
   return (
     <svg className="w-3 h-3 fill-current shrink-0" viewBox="0 0 24 24" aria-hidden="true">

@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { Helmet } from "react-helmet";
 import axios from "axios";
-import { Trophy, Swords, Users, Map as MapIcon, UserPlus, ChevronLeft, AlertCircle, Monitor } from "lucide-react";
+import { Trophy, Swords, Users, Map as MapIcon, UserPlus, ChevronLeft, AlertCircle, Monitor, Gamepad2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import PageWrapper from "../components/PageWrapper";
 import { useAuth } from "../hooks/useAuth";
@@ -14,13 +14,14 @@ import AdminPanel, {
   MapPoolPresetsSection,
   PlayerProfilesSection,
   OverlaySettingsSection,
+  SplatdleActivitySection,
 } from "../components/tournament/AdminPanel";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
 const GUILD_ID = import.meta.env.VITE_GUILD_ID ?? "";
 const ADMIN_DISCORD_IDS = ["339866237922181121"];
 
-type Tab = "organise" | "matches" | "schedule" | "players" | "overlay";
+type Tab = "organise" | "matches" | "schedule" | "players" | "overlay" | "splatdle";
 
 interface AdminTournament {
   id: number;
@@ -37,6 +38,7 @@ const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: st
   { id: "schedule", label: "Schedule & Maps", icon: MapIcon },
   { id: "players",  label: "Players",         icon: UserPlus },
   { id: "overlay",  label: "Overlay",         icon: Monitor },
+  { id: "splatdle", label: "Splatdle",        icon: Gamepad2 },
 ];
 
 export default function TournamentAdmin() {
@@ -243,6 +245,18 @@ export default function TournamentAdmin() {
                 Control what the stream ribbon overlay displays. Changes take effect immediately for all connected overlays.
               </p>
               <OverlaySettingsSection />
+            </div>
+          )}
+
+          {tab === "splatdle" && (
+            <div>
+              <h2 className="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2">
+                <Gamepad2 className="w-4 h-4 text-slate-400" /> Splatdle Activity
+              </h2>
+              <p className="text-xs text-slate-500 mb-4">
+                How many people are on Splatdle right now, and how the day is going.
+              </p>
+              <SplatdleActivitySection />
             </div>
           )}
 

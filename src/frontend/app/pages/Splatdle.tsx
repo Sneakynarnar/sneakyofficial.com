@@ -159,6 +159,28 @@ const Splatdle = () => {
     }
   }, [loggedIn, dailyWon, statsPosted, dailyGuesses, gameMode, postStats]);
 
+  // ── Presence heartbeat ───────────────────────────────────────────────────────
+  // Tells the backend this tab is open so the admin portal can show a live
+  // player count. Anonymous players count too, hence a local session id.
+  useEffect(() => {
+    let sessionId = sessionStorage.getItem("splatdle_session_id");
+    if (!sessionId) {
+      sessionId = crypto.randomUUID();
+      sessionStorage.setItem("splatdle_session_id", sessionId);
+    }
+    const beat = () => {
+      if (document.hidden) return;
+      axios.post(`${API_URL}/api/splatdle/heartbeat`, { session_id: sessionId }).catch(() => { /* offline */ });
+    };
+    beat();
+    const timer = setInterval(beat, 30_000);
+    document.addEventListener("visibilitychange", beat);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", beat);
+    };
+  }, []);
+
   // ── Infinite mode ────────────────────────────────────────────────────────────
 
   const startInfiniteGame = useCallback(() => {
