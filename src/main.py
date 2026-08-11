@@ -15,7 +15,7 @@ from backend.twitch import TwitchBot
 
 setup_logging()
 
-logger = logging.getLogger("sneakyoffical.com")
+logger = logging.getLogger("sneakyofficial.com")
 # fmt: off
 # pylint: disable=line-too-long
 ASCII_BANNER = fr"""
