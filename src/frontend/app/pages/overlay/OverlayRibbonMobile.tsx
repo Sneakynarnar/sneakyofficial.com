@@ -334,115 +334,114 @@ export default function OverlayRibbonMobile() {
         style={{
           width: "100%", height: "100%",
           display: "flex", alignItems: "center",
-          padding: "clamp(10px,2vh,18px) clamp(14px,4vw,28px)",
+          // Tight vertical padding: the row is wide, so height is the scarce axis
+          padding: "clamp(5px,1.2vh,10px) clamp(10px,2.5vw,20px)",
           boxSizing: "border-box",
           background: "rgba(6,6,18,0.95)",
           backdropFilter: "blur(24px) saturate(160%)",
           WebkitBackdropFilter: "blur(24px) saturate(160%)",
           borderTop: `3px solid ${borderColor}`,
           position: "relative", overflow: "hidden",
-          gap: "clamp(10px,3vw,20px)",
+          gap: "clamp(6px,1.8vw,14px)",
         }}
       >
         <div className={accentClass} style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, pointerEvents: "none" }} />
         <div className="mob-scan" style={{ position: "absolute", top: 0, left: 0, width: "30vw", height: "100%", background: isPrivate ? "linear-gradient(to right, transparent, rgba(145,70,255,0.08), transparent)" : "linear-gradient(to right, transparent, rgba(52,211,153,0.08), transparent)", pointerEvents: "none" }} />
 
         {/* Logo */}
-        <div className={logoClass} style={{ width: "clamp(36px,10vw,56px)", height: "clamp(36px,10vw,56px)", borderRadius: "50%", overflow: "hidden", border: logoBorder, flexShrink: 0 }}>
+        <div className={logoClass} style={{ width: "clamp(30px,7vw,46px)", height: "clamp(30px,7vw,46px)", borderRadius: "50%", overflow: "hidden", border: logoBorder, flexShrink: 0 }}>
           <img src="/android-chrome-512x512.png" alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         </div>
 
-        {/* Text block */}
-        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "clamp(2px,0.5vh,5px)" }}>
-          <span style={{ fontSize: "clamp(8px,1.1vh,12px)", fontWeight: 800, letterSpacing: "0.20em", textTransform: "uppercase", color: labelColor, lineHeight: 1 }}>
+        {/* Match type + how to join, stacked to keep the row short */}
+        <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: "clamp(1px,0.4vh,4px)", maxWidth: "22vw" }}>
+          <span style={{ fontSize: "clamp(8px,1.1vh,12px)", fontWeight: 800, letterSpacing: "0.18em", textTransform: "uppercase", color: labelColor, lineHeight: 1.1 }}>
             {isPrivate ? "PRIVATE BATTLE" : "ANARCHY OPEN"}
           </span>
+          <span style={{ fontSize: "clamp(7px,1.5vw,10px)", fontWeight: 600, color: "rgba(255,255,255,0.38)", lineHeight: 1.2 }}>
+            {isPrivate ? "Enter the pool + code in-game" : "Search the pool in Anarchy Open"}
+          </span>
+        </div>
 
-          {/* Pool tag + room code — the two things viewers actually need to read */}
-          {(lobbyPool || lobbyCode) && (
-            <div style={{ display: "flex", alignItems: "stretch", gap: "clamp(8px,2.5vw,16px)", minWidth: 0 }}>
-              {lobbyPool && (
-                <div style={{
-                  display: "flex", flexDirection: "column", gap: "clamp(1px,0.3vh,3px)", minWidth: 0,
-                  padding: "clamp(4px,0.9vh,8px) clamp(8px,2.2vw,14px)",
-                  borderRadius: 8,
-                  border: `2px solid ${labelColor}`,
-                  background: isPrivate ? "rgba(145,70,255,0.14)" : "rgba(52,211,153,0.14)",
-                }}>
-                  <span style={{ fontSize: "clamp(8px,1.05vh,12px)", fontWeight: 900, letterSpacing: "0.20em", textTransform: "uppercase", color: "rgba(255,255,255,0.55)", lineHeight: 1 }}>POOL</span>
-                  <span style={{ fontSize: "clamp(22px,5vh,42px)", fontWeight: 900, color: "#fff", lineHeight: 1.05, fontFamily: "'Courier New', Courier, monospace", letterSpacing: "0.02em", textShadow: isPrivate ? "0 0 18px rgba(145,70,255,0.8)" : "0 0 18px rgba(52,211,153,0.8)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lobbyPool}</span>
-                </div>
-              )}
-              {lobbyCode && (
-                <div style={{
-                  display: "flex", flexDirection: "column", gap: "clamp(1px,0.3vh,3px)", flexShrink: 0,
-                  padding: "clamp(4px,0.9vh,8px) clamp(8px,2.2vw,14px)",
-                  borderRadius: 8,
-                  border: "2px solid rgba(255,255,255,0.55)",
-                  background: "rgba(255,255,255,0.10)",
-                }}>
-                  <span style={{ fontSize: "clamp(8px,1.05vh,12px)", fontWeight: 900, letterSpacing: "0.20em", textTransform: "uppercase", color: "rgba(255,255,255,0.55)", lineHeight: 1 }}>ROOM CODE</span>
-                  <span style={{ fontSize: "clamp(22px,5vh,42px)", fontWeight: 900, color: "#fff", lineHeight: 1.05, fontFamily: "'Courier New', Courier, monospace", letterSpacing: "0.10em", textShadow: "0 0 18px rgba(255,255,255,0.45)" }}>{lobbyCode}</span>
-                </div>
-              )}
-            </div>
-          )}
-          {/* Anarchy Open: one mode across both maps */}
-          {!isPrivate && (lobbyModeName || lobbyStage) && (
-            <span style={{ fontSize: "clamp(10px,1.5vh,14px)", fontWeight: 600, color: "rgba(255,255,255,0.50)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {[modeData ? modeData.name : lobbyModeName, [lobbyStage, lobbyStage2].filter(Boolean).join(" + ")]
-                .filter(Boolean)
-                .join(" · ")}
-            </span>
-          )}
-          {/* Private battle: where we are in the stream rotation */}
-          {isPrivate && rotationMode && (
-            <div style={{ display: "flex", alignItems: "center", gap: "clamp(5px,1.4vw,10px)", minWidth: 0 }}>
-              <img src={rotationMode.icon} alt={rotationMode.name} style={{ width: "clamp(12px,2.6vh,20px)", height: "clamp(12px,2.6vh,20px)", objectFit: "contain", flexShrink: 0 }} />
-              <span style={{ fontSize: "clamp(11px,1.9vh,17px)", fontWeight: 800, color: "rgba(255,255,255,0.85)", whiteSpace: "nowrap" }}>{rotationMode.name}</span>
-              <span style={{ fontSize: "clamp(9px,1.4vh,13px)", fontWeight: 700, color: labelColor, whiteSpace: "nowrap" }}>
-                {gamesLeft <= 1 ? "LAST GAME BEFORE LOBBY REMAKE" : `${gamesLeft} GAMES TILL LOBBY RESET`}
+        {/* Pool tag + room code, the two things viewers actually need to read */}
+        {lobbyPool && (
+          <div style={{
+            flexShrink: 1, minWidth: 0,
+            display: "flex", flexDirection: "column", gap: "clamp(0px,0.2vh,2px)",
+            padding: "clamp(3px,0.7vh,7px) clamp(7px,1.8vw,13px)",
+            borderRadius: 8,
+            border: `2px solid ${labelColor}`,
+            background: isPrivate ? "rgba(145,70,255,0.14)" : "rgba(52,211,153,0.14)",
+          }}>
+            <span style={{ fontSize: "clamp(7px,0.95vh,11px)", fontWeight: 900, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(255,255,255,0.55)", lineHeight: 1 }}>POOL</span>
+            <span style={{ fontSize: "clamp(18px,4vh,34px)", fontWeight: 900, color: "#fff", lineHeight: 1.05, fontFamily: "'Courier New', Courier, monospace", letterSpacing: "0.02em", textShadow: isPrivate ? "0 0 18px rgba(145,70,255,0.8)" : "0 0 18px rgba(52,211,153,0.8)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lobbyPool}</span>
+          </div>
+        )}
+        {lobbyCode && (
+          <div style={{
+            flexShrink: 0,
+            display: "flex", flexDirection: "column", gap: "clamp(0px,0.2vh,2px)",
+            padding: "clamp(3px,0.7vh,7px) clamp(7px,1.8vw,13px)",
+            borderRadius: 8,
+            border: "2px solid rgba(255,255,255,0.55)",
+            background: "rgba(255,255,255,0.10)",
+          }}>
+            <span style={{ fontSize: "clamp(7px,0.95vh,11px)", fontWeight: 900, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(255,255,255,0.55)", lineHeight: 1 }}>ROOM CODE</span>
+            <span style={{ fontSize: "clamp(18px,4vh,34px)", fontWeight: 900, color: "#fff", lineHeight: 1.05, fontFamily: "'Courier New', Courier, monospace", letterSpacing: "0.08em" }}>{lobbyCode}</span>
+          </div>
+        )}
+
+        {/* Private battle: where we are in the stream rotation */}
+        {isPrivate && rotationMode && (
+          <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: "clamp(4px,1.2vw,9px)" }}>
+            <img src={rotationMode.icon} alt={rotationMode.name} style={{ width: "clamp(14px,2.8vh,22px)", height: "clamp(14px,2.8vh,22px)", objectFit: "contain", flexShrink: 0 }} />
+            <div style={{ display: "flex", flexDirection: "column", gap: "clamp(0px,0.2vh,2px)" }}>
+              <span style={{ fontSize: "clamp(11px,1.9vh,17px)", fontWeight: 900, color: "#fff", lineHeight: 1.1, whiteSpace: "nowrap" }}>{rotationMode.name}</span>
+              <span style={{ fontSize: "clamp(7px,1.2vh,11px)", fontWeight: 700, letterSpacing: "0.10em", color: labelColor, whiteSpace: "nowrap" }}>
+                {gamesLeft <= 1 ? "LAST GAME THIS LOBBY" : `${gamesLeft} GAMES TILL RESET`}
               </span>
             </div>
-          )}
-          {/* How to join */}
-          <span style={{ fontSize: "clamp(8px,1.8vw,11px)", fontWeight: 600, color: "rgba(255,255,255,0.38)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {isPrivate ? "Enter the pool + code in-game to join" : "Search the pool in Anarchy Open"}
-          </span>
+          </div>
+        )}
 
-          {/* Tournament map pool ticker */}
-          {poolEntry && (
-            <div style={{ display: "flex", alignItems: "center", gap: "clamp(4px,1vw,8px)", opacity: poolVisible ? 1 : 0, transform: poolVisible ? "translateX(0)" : "translateX(6px)", transition: "opacity 0.3s ease, transform 0.3s ease" }}>
-              <span style={{ fontSize: "clamp(7px,1.5vw,9px)", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "rgba(255,255,255,0.22)", flexShrink: 0 }}>MAP POOL</span>
+        {/* Spacer keeps the map pool ticker and stages on the right */}
+        <div style={{ flex: 1, minWidth: "clamp(4px,1vw,12px)" }} />
+
+        {/* Tournament map pool ticker */}
+        {poolEntry && (
+          <div style={{ flexShrink: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "clamp(0px,0.2vh,2px)", opacity: poolVisible ? 1 : 0, transform: poolVisible ? "translateX(0)" : "translateX(6px)", transition: "opacity 0.3s ease, transform 0.3s ease" }}>
+            <span style={{ fontSize: "clamp(7px,0.95vh,10px)", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "rgba(255,255,255,0.22)" }}>MAP POOL</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "clamp(3px,0.8vw,6px)", minWidth: 0 }}>
               <img src={poolEntry.modeIcon} alt={poolEntry.modeName} style={{ width: "clamp(9px,2.2vw,13px)", height: "clamp(9px,2.2vw,13px)", objectFit: "contain", opacity: 0.65, flexShrink: 0 }} />
               <span style={{ fontSize: "clamp(8px,1.8vw,11px)", fontWeight: 600, color: "rgba(255,255,255,0.45)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {poolEntry.stageName}
               </span>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* Anarchy Open: the two stages, both under the single mode */}
+        {/* Anarchy Open: the two stages side by side, both under the single mode */}
         {!isPrivate && (stageData || stageData2) && (
-          <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: "clamp(3px,0.6vh,6px)" }}>
-            {[{ sd: stageData, name: lobbyStage, md: modeData, mn: lobbyModeName }, { sd: stageData2, name: lobbyStage2, md: modeData, mn: lobbyModeName }]
+          <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: "clamp(4px,1.2vw,10px)" }}>
+            {(modeData || lobbyModeName) && (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "clamp(1px,0.3vh,3px)" }}>
+                {modeData && (
+                  <img src={modeData.icon} alt={modeData.name} style={{ width: "clamp(14px,2.8vh,22px)", height: "clamp(14px,2.8vh,22px)", objectFit: "contain" }} />
+                )}
+                <span style={{ fontSize: "clamp(7px,1.5vw,10px)", fontWeight: 800, color: "rgba(255,255,255,0.75)", whiteSpace: "nowrap", lineHeight: 1 }}>
+                  {modeData ? modeData.name : lobbyModeName}
+                </span>
+              </div>
+            )}
+            {[{ sd: stageData, name: lobbyStage }, { sd: stageData2, name: lobbyStage2 }]
               .filter(s => s.sd)
               .map((slot, i) => (
-                <div key={i} style={{ width: "clamp(60px,18vw,100px)", display: "flex", flexDirection: "column", alignItems: "center", gap: "clamp(1px,0.3vh,3px)" }}>
-                  <div style={{ position: "relative", width: "100%", height: "clamp(24px,4.5vh,38px)", borderRadius: 4, overflow: "hidden", border: "1px solid rgba(255,255,255,0.14)" }}>
-                    {slot.sd ? (
-                      <img src={slot.sd.image} alt={slot.name ?? ""} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    ) : (
-                      <div style={{ width: "100%", height: "100%", background: "rgba(255,255,255,0.05)" }} />
-                    )}
-                    {slot.md && (
-                      <div style={{ position: "absolute", bottom: 2, right: 3 }}>
-                        <img src={slot.md.icon} alt={slot.md.name} style={{ width: "clamp(9px,2vw,14px)", height: "clamp(9px,2vw,14px)", objectFit: "contain", filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.9))" }} />
-                      </div>
-                    )}
+                <div key={i} style={{ width: "clamp(52px,13vw,90px)", display: "flex", flexDirection: "column", alignItems: "center", gap: "clamp(1px,0.3vh,3px)" }}>
+                  <div style={{ position: "relative", width: "100%", height: "clamp(22px,4vh,34px)", borderRadius: 4, overflow: "hidden", border: "1px solid rgba(255,255,255,0.14)" }}>
+                    <img src={slot.sd!.image} alt={slot.name ?? ""} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   </div>
-                  <span style={{ fontSize: "clamp(7px,1.7vw,10px)", fontWeight: 700, color: "rgba(255,255,255,0.75)", textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%", lineHeight: 1 }}>
-                    {slot.name ?? slot.mn ?? ""}
+                  <span style={{ fontSize: "clamp(7px,1.5vw,10px)", fontWeight: 700, color: "rgba(255,255,255,0.75)", textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%", lineHeight: 1 }}>
+                    {slot.name ?? ""}
                   </span>
                 </div>
               ))}

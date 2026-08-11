@@ -140,7 +140,7 @@ const IDLE_SLIDES = [
   { icon: "🟣", left: "TWITCH  →  !splattag YourName#1234", right: "then  !in  to enter", accent: "rgba(145,70,255,0.85)" },
   { icon: "4️⃣", left: "Need to link Discord first?", right: "/profile link twitch:yourname  in Discord", accent: "rgba(145,70,255,0.70)" },
   { icon: "💬", left: "YouTube / TikTok viewers:", right: `Join ${DISCORD}  →  /tournament signup`, accent: "rgba(88,101,242,0.90)" },
-  { icon: "🌐", left: "In a match?", right: "sneakyofficial.com/tournament  —  confirm results here", accent: "rgba(52,211,153,0.75)" },
+  { icon: "🌐", left: "In a match?", right: "sneakyofficial.com/tournament  ·  confirm results here", accent: "rgba(52,211,153,0.75)" },
 ];
 const SLIDE_MS = 4500;
 const FADE_MS  = 320;

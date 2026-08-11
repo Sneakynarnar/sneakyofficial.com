@@ -2907,7 +2907,7 @@ export function OverlaySettingsSection() {
                       disabled={rotating}
                       className="px-3 py-2 rounded text-xs font-medium bg-green-700/70 border border-green-500/50 text-white hover:bg-green-600/70 disabled:opacity-50"
                     >
-                      Lobby remade — restart
+                      Lobby remade, restart
                     </button>
                   </div>
                   <p className="text-[11px] text-slate-600">
