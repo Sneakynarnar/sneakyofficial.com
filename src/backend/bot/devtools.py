@@ -322,7 +322,7 @@ class DevTools(interactions.Extension):
 
         if not role.is_assignable:
             await ctx.send(
-                f"❌ I can't assign **{role.name}** — it sits above my highest role. "
+                f"❌ I can't assign **{role.name}**: it sits above my highest role. "
                 "Move my role above it and try again.",
                 ephemeral=True
             )
@@ -349,7 +349,7 @@ class DevTools(interactions.Extension):
 
         if not targets:
             await ctx.send(
-                f"✅ Nothing to do — all **{already_had}** non-bot member(s) already have **{role.name}**."
+                f"✅ Nothing to do, all **{already_had}** non-bot member(s) already have **{role.name}**."
             )
             return
 
@@ -392,7 +392,7 @@ class DevTools(interactions.Extension):
             await ctx.send(result_message)
 
         logger.info(
-            "/giveall: role %s in guild %s — added=%s already_had=%s failed=%s",
+            "/giveall: role %s in guild %s: added=%s already_had=%s failed=%s",
             role.id, ctx.guild.id, added, already_had, failed
         )
 
@@ -407,7 +407,7 @@ class DevTools(interactions.Extension):
         when the gateway drops, so without this the bot looks alive while it is
         no longer receiving commands. main.py supervises and reconnects.
         """
-        logger.warning("Discord gateway disconnected — commands will not be received until it reconnects")
+        logger.warning("Discord gateway disconnected, commands will not be received until it reconnects")
 
     @interactions.listen(Startup)
     async def assign_channel(self) -> None:

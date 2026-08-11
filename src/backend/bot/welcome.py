@@ -27,8 +27,8 @@ WELCOME_CHANNEL_ID = 1019293452451725384
 MEMBER_ROLE_ID = 1019293451600273538
 
 # Channels referenced in the welcome DM
-PINGS_CHANNEL_ID = 1535809522734600312
-GENERAL_CHANNEL_ID = 1019293452451725386
+INTRO_CHANNEL_ID = 1535809522734600312
+ROLES_CHANNEL_ID = 1019293452451725386
 LFG_CHANNEL_ID = 1507063329418379346
 
 # custom_id -> (role id, label, emoji, description)
@@ -63,20 +63,25 @@ _ROLE_RETRY_DELAY = 2.0
 
 
 def _ping_embed() -> Embed:
-    """Build the embed describing the self-assignable ping roles."""
+    """Build the embed describing the self-assignable ping roles.
+
+    Role mentions are written as plain names rather than <@&id>: this embed is
+    also sent in DMs, where Discord has no guild to resolve the mention against
+    and renders it as @unknown-role.
+    """
     embed = Embed(
         title="Ping Roles",
         description=(
-            f"These roles live in <#{PINGS_CHANNEL_ID}> and **anyone can ping them**, so if you "
+            f"These roles live in <#{ROLES_CHANNEL_ID}> and **anyone can ping them**, so if you "
             "want to play something just say so in "
             f"<#{LFG_CHANNEL_ID}>, like:\n\n"
-            f"> <@&{PING_ROLES['open'][0]}> Looking for +2 to join us for open!\n\n"
+            f"> @{PING_ROLES['open'][1]} Looking for +2 to join us for open!\n\n"
             "Tick the ones you want below. Unticking a role removes it."
         ),
         color=0x5F0DD9,
     )
-    for role_id, label, emoji, description in PING_ROLES.values():
-        embed.add_field(name=f"{emoji} {label}", value=f"<@&{role_id}> — {description}", inline=False)
+    for _role_id, label, emoji, description in PING_ROLES.values():
+        embed.add_field(name=f"{emoji} {label}", value=description, inline=False)
     return embed
 
 
@@ -136,12 +141,12 @@ class Welcome(interactions.Extension):
             title="Welcome to the server! 🦑",
             description=(
                 f"Hey {member.mention}, glad to have you here! Here is where everything lives:\n\n"
-                f"• <#{GENERAL_CHANNEL_ID}> — general chat, say hi and introduce yourself.\n"
-                f"• <#{LFG_CHANNEL_ID}> — looking for group. Ping a role here when you want players.\n"
-                f"• <#{PINGS_CHANNEL_ID}> — the ping roles channel, where you can grab these roles "
+                f"• <#{INTRO_CHANNEL_ID}>: say hi and introduce yourself.\n"
+                f"• <#{LFG_CHANNEL_ID}>: looking for group. Ping a role here when you want players.\n"
+                f"• <#{ROLES_CHANNEL_ID}>: the roles channel, where you can grab these ping roles "
                 "any time.\n\n"
                 "The ping roles below are pingable by anyone, so feel free to send a message like:\n"
-                f"> <@&{PING_ROLES['open'][0]}> Looking for +2 to join us for open!\n\n"
+                f"> @{PING_ROLES['open'][1]} Looking for +2 to join us for open!\n\n"
                 "Press the button to pick which pings you want."
             ),
             color=0x5F0DD9,
