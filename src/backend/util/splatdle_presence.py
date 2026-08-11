@@ -16,6 +16,7 @@ ACTIVE_WINDOW_SECONDS = 75
 
 _sessions: dict[str, float] = {}
 _seen_today: set[str] = set()
+_visitors_recorded_today: set[str] = set()
 _peak_today: int = 0
 _peak_at: float | None = None
 _today: date = datetime.now(timezone.utc).date()
@@ -23,13 +24,27 @@ _today: date = datetime.now(timezone.utc).date()
 
 def _roll_day_if_needed() -> None:
     """Clear the daily counters when the UTC date changes, matching the game reset."""
-    global _today, _seen_today, _peak_today, _peak_at
+    global _today, _seen_today, _peak_today, _peak_at, _visitors_recorded_today
     today = datetime.now(timezone.utc).date()
     if today != _today:
         _today = today
         _seen_today = set()
+        _visitors_recorded_today = set()
         _peak_today = 0
         _peak_at = None
+
+
+def claim_visit(visitor_id: str) -> bool:
+    """Return True the first time a visitor is seen today.
+
+    Heartbeats arrive every 30s, so this keeps the history table to one write
+    per visitor per day instead of one per beat.
+    """
+    _roll_day_if_needed()
+    if visitor_id in _visitors_recorded_today:
+        return False
+    _visitors_recorded_today.add(visitor_id)
+    return True
 
 
 def _prune(now: float) -> None:

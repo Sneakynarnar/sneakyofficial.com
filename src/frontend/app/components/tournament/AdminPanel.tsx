@@ -2959,6 +2959,15 @@ export function OverlaySettingsSection() {
 
 // ---- Splatdle activity section -------------------------------------------
 
+interface SplatdleHistory {
+  days: number;
+  unique_visitors: number;
+  unique_players: number;
+  total_plays: number;
+  average_guesses: number | null;
+  series: { date: string; visitors: number; plays: number }[];
+}
+
 interface SplatdleActivity {
   playing_now: number;
   sessions_today: number;
@@ -2968,23 +2977,31 @@ interface SplatdleActivity {
   completed_today: number | null;
   registered_players: number | null;
   average_guesses_today: number | null;
+  history: SplatdleHistory | null;
+  history_week: SplatdleHistory | null;
 }
+
+const RANGE_OPTIONS = [7, 30, 90] as const;
 
 export function SplatdleActivitySection() {
   const [data, setData] = useState<SplatdleActivity | null>(null);
   const [error, setError] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  const [range, setRange] = useState<number>(30);
 
   const load = useCallback(async () => {
     try {
-      const res = await axios.get(`${API_URL}/api/splatdle/activity`, { withCredentials: true });
+      const res = await axios.get(`${API_URL}/api/splatdle/activity`, {
+        params: { days: range },
+        withCredentials: true,
+      });
       setData(res.data);
       setError(false);
       setUpdatedAt(new Date());
     } catch {
       setError(true);
     }
-  }, []);
+  }, [range]);
 
   // Poll often enough that the live count feels live without hammering the API.
   useEffect(() => {
@@ -3061,6 +3078,119 @@ export function SplatdleActivitySection() {
         Live counts come from the page itself, so they include players who are not logged in and reset when the
         backend restarts. Updated {updatedAt ? updatedAt.toLocaleTimeString() : "never"}, and every 15s.
       </p>
+
+      <SplatdleHistoryPanel
+        history={data.history}
+        week={data.history_week}
+        range={range}
+        onRangeChange={setRange}
+      />
+    </div>
+  );
+}
+
+function SplatdleHistoryPanel({ history, week, range, onRangeChange }: {
+  history: SplatdleHistory | null;
+  week: SplatdleHistory | null;
+  range: number;
+  onRangeChange: (days: number) => void;
+}) {
+  const rangeLabel = range === 7 ? "7 days" : range === 30 ? "30 days" : `${range} days`;
+
+  return (
+    <div className="border-t border-slate-700/40 pt-4 mt-1 flex flex-col gap-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <h3 className="text-[11px] text-slate-500 uppercase tracking-wide font-semibold">History</h3>
+        <div className="flex gap-1 ml-auto">
+          {RANGE_OPTIONS.map((d) => (
+            <button
+              key={d}
+              onClick={() => onRangeChange(d)}
+              className={`px-2 py-1 rounded text-[11px] font-medium border transition-colors ${
+                range === d
+                  ? "bg-purple-600 border-purple-500 text-white"
+                  : "bg-slate-700/60 border-slate-600/50 text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              {d}d
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {!history ? (
+        <p className="text-xs text-slate-500">
+          No history yet. It starts filling up as soon as people visit the game.
+        </p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <HistoryTile label={`Visitors, ${rangeLabel}`} value={history.unique_visitors} hint="Unique browsers" />
+            <HistoryTile label={`Players, ${rangeLabel}`} value={history.unique_players} hint="Logged in, finished a game" />
+            <HistoryTile label={`Games won, ${rangeLabel}`} value={history.total_plays} hint="One per player per day" />
+            <HistoryTile
+              label="Visitors, 7 days"
+              value={week ? week.unique_visitors : 0}
+              hint={week && week.unique_players ? `${week.unique_players} logged in` : "Last week"}
+            />
+          </div>
+          <HistoryChart series={history.series} />
+        </>
+      )}
+    </div>
+  );
+}
+
+function HistoryTile({ label, value, hint }: { label: string; value: number; hint: string }) {
+  return (
+    <div className="rounded-lg border border-slate-700/50 bg-slate-800/40 p-3">
+      <p className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">{label}</p>
+      <p className="text-xl font-black text-slate-100 leading-tight">{value}</p>
+      <p className="text-[10px] text-slate-600 mt-0.5">{hint}</p>
+    </div>
+  );
+}
+
+function HistoryChart({ series }: { series: { date: string; visitors: number; plays: number }[] }) {
+  if (series.length === 0) {
+    return <p className="text-xs text-slate-500">No visits recorded in this range yet.</p>;
+  }
+  const max = Math.max(...series.map((d) => d.visitors), 1);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-end gap-[3px] h-28 overflow-x-auto">
+        {series.map((d) => (
+          <div
+            key={d.date}
+            className="flex-1 min-w-[6px] flex flex-col justify-end h-full group relative"
+            title={`${d.date}: ${d.visitors} visitor(s), ${d.plays} win(s)`}
+          >
+            <div
+              className="w-full bg-purple-600/40 rounded-t-sm relative"
+              style={{ height: `${(d.visitors / max) * 100}%` }}
+            >
+              {/* Wins sit inside the visitor bar, so the gap is the drop off */}
+              <div
+                className="absolute bottom-0 left-0 right-0 bg-green-500/70 rounded-t-sm"
+                style={{ height: d.visitors ? `${Math.min(d.plays / d.visitors, 1) * 100}%` : "0%" }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center justify-between text-[10px] text-slate-600">
+        <span>{series[0].date}</span>
+        <span className="flex items-center gap-3">
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-sm bg-purple-600/40 inline-block" /> visitors
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-sm bg-green-500/70 inline-block" /> games won
+          </span>
+        </span>
+        <span>{series[series.length - 1].date}</span>
+      </div>
     </div>
   );
 }

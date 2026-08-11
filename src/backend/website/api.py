@@ -9,6 +9,7 @@ from ..util.database_context_manager import DBContextManager
 from ..util.broadcaster import TournamentBroadcaster
 from ..util import overlay_settings as _ov
 from ..util import splatdle_presence as _presence
+from . import splatdle_history as _history
 from ..tournament import TournamentManager
 from ..util.config import global_config
 import interactions
@@ -188,6 +189,10 @@ class SneakyApi:
                         VALUES (%s, %s, NOW())
                         ON DUPLICATE KEY UPDATE guess_count = %s
                     """, (discord_id, guess_count, guess_count))
+
+            # TodaysLeaderboard is wiped at every reset, so keep a permanent row
+            # for the long range stats in the admin portal.
+            await _history.record_play(discord_id, guess_count)
             # Get global average for comparison
             await cur.execute("SELECT AVG(average_guess_count) as global_avg FROM UserStats WHERE times_played > 0")
             global_avg_row = await cur.fetchone()
@@ -1200,6 +1205,12 @@ class SneakyApi:
             return web.json_response({"error": "Missing session_id"}, status=400)
 
         _presence.touch(session_id)
+
+        # The visitor id survives between sessions, so it is what the history
+        # tables count. Only the first beat of the day hits the database.
+        visitor_id = str(body.get("visitor_id") or "").strip()[:64]
+        if visitor_id and _presence.claim_visit(visitor_id):
+            await _history.record_visit(visitor_id)
         return web.json_response({"ok": True})
 
     @verify_tournament_admin
@@ -1224,4 +1235,17 @@ class SneakyApi:
             data["completed_today"] = None
             data["registered_players"] = None
             data["average_guesses_today"] = None
+
+        try:
+            days = int(request.rel_url.query.get("days", 30))
+        except ValueError:
+            days = 30
+        days = max(1, min(days, 365))
+        try:
+            data["history"] = await _history.summary(days)
+            data["history_week"] = await _history.summary(7)
+        except Exception:
+            logger.exception("serve_splatdle_activity failed to read history")
+            data["history"] = None
+            data["history_week"] = None
         return web.json_response(data)

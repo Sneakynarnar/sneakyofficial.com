@@ -168,9 +168,18 @@ const Splatdle = () => {
       sessionId = crypto.randomUUID();
       sessionStorage.setItem("splatdle_session_id", sessionId);
     }
+    // Kept between visits so returning players are not counted as new ones in
+    // the monthly figures. Random, and tied to nothing else.
+    let visitorId = localStorage.getItem("splatdle_visitor_id");
+    if (!visitorId) {
+      visitorId = crypto.randomUUID();
+      localStorage.setItem("splatdle_visitor_id", visitorId);
+    }
     const beat = () => {
       if (document.hidden) return;
-      axios.post(`${API_URL}/api/splatdle/heartbeat`, { session_id: sessionId }).catch(() => { /* offline */ });
+      axios
+        .post(`${API_URL}/api/splatdle/heartbeat`, { session_id: sessionId, visitor_id: visitorId })
+        .catch(() => { /* offline */ });
     };
     beat();
     const timer = setInterval(beat, 30_000);

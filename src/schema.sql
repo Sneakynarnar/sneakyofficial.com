@@ -280,3 +280,21 @@ CREATE TABLE IF NOT EXISTS map_pool_presets (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS SplatdleVisits (
+visitor_id VARCHAR(64) NOT NULL,
+visit_date DATE NOT NULL,
+first_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+PRIMARY KEY (visitor_id, visit_date),
+INDEX idx_visit_date (visit_date)
+);
+
+CREATE TABLE IF NOT EXISTS SplatdlePlays (
+id INT AUTO_INCREMENT PRIMARY KEY,
+discord_id BIGINT NOT NULL,
+guess_count INT NOT NULL,
+played_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+play_date DATE NOT NULL,
+UNIQUE KEY uq_player_day (discord_id, play_date),
+INDEX idx_play_date (play_date)
+);
