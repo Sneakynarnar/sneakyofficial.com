@@ -224,8 +224,8 @@ function useRibbonKeyframes() {
         animation: splRibbonAccentCycle 5s linear infinite;
       }
       @keyframes splRibbonLobbyPulse {
-        0%, 100% { box-shadow: 0 0 8px rgba(52,211,153,0.4), 0 0 22px rgba(52,211,153,0.18); }
-        50%      { box-shadow: 0 0 18px rgba(52,211,153,0.8), 0 0 46px rgba(52,211,153,0.38), 0 0 80px rgba(52,211,153,0.12); }
+        0%, 100% { box-shadow: 0 0 8px rgba(245,73,16,0.4), 0 0 22px rgba(245,73,16,0.18); }
+        50%      { box-shadow: 0 0 18px rgba(245,73,16,0.8), 0 0 46px rgba(245,73,16,0.38), 0 0 80px rgba(245,73,16,0.12); }
       }
       @keyframes splRibbonPrivatePulse {
         0%, 100% { box-shadow: 0 0 8px rgba(145,70,255,0.4), 0 0 22px rgba(145,70,255,0.18); }
@@ -246,8 +246,8 @@ function useRibbonKeyframes() {
         }
       }
       .spl-reset-flash { animation: splResetFlash 2.6s ease-in-out infinite; }
-      .spl-ribbon-green-cycle {
-        background: linear-gradient(90deg, rgba(16,185,129,0.65), rgba(52,211,153,0.65), rgba(16,185,129,0.65));
+      .spl-ribbon-anarchy-cycle {
+        background: linear-gradient(90deg, rgba(214,58,10,0.7), rgba(245,73,16,0.7), rgba(251,146,60,0.7), rgba(245,73,16,0.7), rgba(214,58,10,0.7));
         background-size: 200% auto;
         animation: splRibbonAccentCycle 4s linear infinite;
       }
@@ -497,7 +497,7 @@ export default function OverlayRibbon() {
     const gamesLeft = settings.private_games_until_reset;
     const accentTop = isPrivate
       ? "linear-gradient(to right, transparent, rgba(145,70,255,0.55) 30%, rgba(145,70,255,0.55) 70%, transparent)"
-      : "linear-gradient(to right, transparent, rgba(52,211,153,0.55) 30%, rgba(52,211,153,0.55) 70%, transparent)";
+      : "linear-gradient(to right, transparent, rgba(245,73,16,0.65) 30%, rgba(245,73,16,0.65) 70%, transparent)";
 
     return (
       <div
@@ -511,17 +511,17 @@ export default function OverlayRibbon() {
           background: "rgba(6,6,18,0.93)",
           backdropFilter: "blur(28px) saturate(160%)",
           WebkitBackdropFilter: "blur(28px) saturate(160%)",
-          borderTop: isPrivate ? "1.5px solid rgba(145,70,255,0.40)" : "1.5px solid rgba(52,211,153,0.40)",
+          borderTop: isPrivate ? "1.5px solid rgba(145,70,255,0.40)" : "1.5px solid rgba(245,73,16,0.55)",
           position: "relative", overflow: "hidden",
         }}
       >
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: accentTop, pointerEvents: "none" }} />
-        <div className="spl-ribbon-scan" style={{ position: "absolute", top: 0, left: 0, width: "8vw", height: "100%", background: isPrivate ? "linear-gradient(to right, transparent, rgba(145,70,255,0.10), transparent)" : "linear-gradient(to right, transparent, rgba(52,211,153,0.10), transparent)", pointerEvents: "none" }} />
+        <div className="spl-ribbon-scan" style={{ position: "absolute", top: 0, left: 0, width: "8vw", height: "100%", background: isPrivate ? "linear-gradient(to right, transparent, rgba(145,70,255,0.10), transparent)" : "linear-gradient(to right, transparent, rgba(245,73,16,0.12), transparent)", pointerEvents: "none" }} />
 
         {/* Logo */}
         <div
           className={isPrivate ? "spl-ribbon-private-glow" : "spl-ribbon-lobby-glow"}
-          style={{ width: "clamp(28px,4vh,44px)", height: "clamp(28px,4vh,44px)", borderRadius: "50%", overflow: "hidden", border: isPrivate ? "2px solid rgba(145,70,255,0.80)" : "2px solid rgba(52,211,153,0.80)", flexShrink: 0 }}
+          style={{ width: "clamp(28px,4vh,44px)", height: "clamp(28px,4vh,44px)", borderRadius: "50%", overflow: "hidden", border: isPrivate ? "2px solid rgba(145,70,255,0.80)" : "2px solid rgba(245,73,16,0.85)", flexShrink: 0 }}
         >
           <img src="/android-chrome-512x512.png" alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         </div>
@@ -540,7 +540,7 @@ export default function OverlayRibbon() {
 
         {/* Match type label */}
         <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: "0.2vh" }}>
-          <span style={{ fontSize: "clamp(6px,0.72vw,9px)", fontWeight: 900, letterSpacing: "0.28em", textTransform: "uppercase", color: isPrivate ? "rgba(145,70,255,0.90)" : "rgba(52,211,153,0.90)", whiteSpace: "nowrap" }}>
+          <span style={{ fontSize: "clamp(6px,0.72vw,9px)", fontWeight: 900, letterSpacing: "0.28em", textTransform: "uppercase", color: isPrivate ? "rgba(145,70,255,0.90)" : "rgba(249,115,42,0.95)", whiteSpace: "nowrap" }}>
             {isPrivate ? "PRIVATE" : "ANARCHY"}
           </span>
           <span style={{ fontSize: "clamp(6px,0.65vw,8px)", fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(255,255,255,0.28)", whiteSpace: "nowrap" }}>
@@ -555,7 +555,7 @@ export default function OverlayRibbon() {
           <>
             <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: "0.15vh" }}>
               <span style={{ fontSize: "clamp(6px,0.65vw,8px)", fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(255,255,255,0.25)" }}>POOL</span>
-              <span style={{ fontSize: "clamp(12px,1.8vw,22px)", fontWeight: 900, fontFamily: "'Courier New', Courier, monospace", color: isPrivate ? "rgb(196,150,255)" : "rgb(110,231,183)", letterSpacing: "0.06em", lineHeight: 1, whiteSpace: "nowrap" }}>{lobbyPool}</span>
+              <span style={{ fontSize: "clamp(12px,1.8vw,22px)", fontWeight: 900, fontFamily: "'Courier New', Courier, monospace", color: isPrivate ? "rgb(196,150,255)" : "rgb(253,150,100)", letterSpacing: "0.06em", lineHeight: 1, whiteSpace: "nowrap" }}>{lobbyPool}</span>
             </div>
             <Divider />
           </>

@@ -100,8 +100,8 @@ function useMobileKeyframes() {
         animation: mobAccentCycle 4s linear infinite;
       }
       @keyframes mobLobbyPulse {
-        0%, 100% { box-shadow: 0 0 10px rgba(52,211,153,0.5), 0 0 28px rgba(52,211,153,0.25); }
-        50%      { box-shadow: 0 0 22px rgba(52,211,153,1.0), 0 0 56px rgba(52,211,153,0.5); }
+        0%, 100% { box-shadow: 0 0 10px rgba(245,73,16,0.5), 0 0 28px rgba(245,73,16,0.25); }
+        50%      { box-shadow: 0 0 22px rgba(245,73,16,1.0), 0 0 56px rgba(245,73,16,0.5); }
       }
       @keyframes mobPrivatePulse {
         0%, 100% { box-shadow: 0 0 10px rgba(145,70,255,0.5), 0 0 28px rgba(145,70,255,0.25); }
@@ -129,8 +129,8 @@ function useMobileKeyframes() {
         }
       }
       .mob-reset-flash { animation: mobResetFlash 2.6s ease-in-out infinite; }
-      .mob-green-cycle {
-        background: linear-gradient(90deg, rgba(16,185,129,0.8), rgba(52,211,153,0.8), rgba(16,185,129,0.8));
+      .mob-anarchy-cycle {
+        background: linear-gradient(90deg, rgba(214,58,10,0.85), rgba(245,73,16,0.85), rgba(251,146,60,0.85), rgba(245,73,16,0.85), rgba(214,58,10,0.85));
         background-size: 200% auto;
         animation: mobAccentCycle 4s linear infinite;
       }
@@ -337,11 +337,11 @@ export default function OverlayRibbonMobile() {
     const gamesLeft     = settings.private_games_until_reset;
     const isLastGame    = gamesLeft <= 1;
 
-    const borderColor = isPrivate ? "rgba(145,70,255,0.55)" : "rgba(52,211,153,0.55)";
-    const labelColor  = isPrivate ? "rgba(145,70,255,0.90)" : "rgba(52,211,153,0.90)";
+    const borderColor = isPrivate ? "rgba(145,70,255,0.55)" : "rgba(245,73,16,0.65)";
+    const labelColor  = isPrivate ? "rgba(145,70,255,0.90)" : "rgba(249,115,42,0.95)";
     const logoClass   = isPrivate ? "mob-private-glow" : "mob-lobby-glow";
-    const logoBorder  = isPrivate ? "2.5px solid rgba(145,70,255,0.85)" : "2.5px solid rgba(52,211,153,0.85)";
-    const accentClass = isPrivate ? "mob-accent-cycle" : "mob-green-cycle";
+    const logoBorder  = isPrivate ? "2.5px solid rgba(145,70,255,0.85)" : "2.5px solid rgba(245,73,16,0.9)";
+    const accentClass = isPrivate ? "mob-accent-cycle" : "mob-anarchy-cycle";
 
     return (
       <div
@@ -364,7 +364,7 @@ export default function OverlayRibbonMobile() {
         }}
       >
         <div className={accentClass} style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, pointerEvents: "none" }} />
-        <div className="mob-scan" style={{ position: "absolute", top: 0, left: 0, width: "30vw", height: "100%", background: isPrivate ? "linear-gradient(to right, transparent, rgba(145,70,255,0.08), transparent)" : "linear-gradient(to right, transparent, rgba(52,211,153,0.08), transparent)", pointerEvents: "none" }} />
+        <div className="mob-scan" style={{ position: "absolute", top: 0, left: 0, width: "30vw", height: "100%", background: isPrivate ? "linear-gradient(to right, transparent, rgba(145,70,255,0.08), transparent)" : "linear-gradient(to right, transparent, rgba(245,73,16,0.10), transparent)", pointerEvents: "none" }} />
 
         {/* Logo */}
         <div className={logoClass} style={{ width: "clamp(22px,6vw,40px)", height: "clamp(22px,6vw,40px)", borderRadius: "50%", overflow: "hidden", border: logoBorder, flexShrink: 0 }}>
@@ -402,10 +402,10 @@ export default function OverlayRibbonMobile() {
             padding: "clamp(2px,0.6vw,6px) clamp(5px,1.4vw,11px)",
             borderRadius: 7,
             border: `2px solid ${labelColor}`,
-            background: isPrivate ? "rgba(145,70,255,0.14)" : "rgba(52,211,153,0.14)",
+            background: isPrivate ? "rgba(145,70,255,0.14)" : "rgba(245,73,16,0.18)",
           }}>
             <span style={{ fontSize: "clamp(6px,1.4vw,10px)", fontWeight: 900, letterSpacing: "0.16em", textTransform: "uppercase", color: "rgba(255,255,255,0.55)", lineHeight: 1 }}>POOL</span>
-            <span style={{ fontSize: "clamp(14px,3.6vw,26px)", fontWeight: 900, color: "#fff", lineHeight: 1.05, fontFamily: "'Courier New', Courier, monospace", letterSpacing: "0.02em", textShadow: isPrivate ? "0 0 18px rgba(145,70,255,0.8)" : "0 0 18px rgba(52,211,153,0.8)", whiteSpace: "nowrap" }}>{lobbyPool}</span>
+            <span style={{ fontSize: "clamp(14px,3.6vw,26px)", fontWeight: 900, color: "#fff", lineHeight: 1.05, fontFamily: "'Courier New', Courier, monospace", letterSpacing: "0.02em", textShadow: isPrivate ? "0 0 18px rgba(145,70,255,0.8)" : "0 0 18px rgba(245,73,16,0.85)", whiteSpace: "nowrap" }}>{lobbyPool}</span>
           </div>
         )}
         {lobbyCode && (
