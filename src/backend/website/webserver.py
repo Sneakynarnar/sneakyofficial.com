@@ -10,6 +10,14 @@ from ..util.config import global_config
 from .api import SneakyApi
 logger = logging.getLogger("webserver")
 
+# Sent with every HTML response. The asset filenames are content hashed and can
+# be cached forever, but the HTML that points at them must never be.
+_NO_CACHE_HEADERS = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    "Pragma": "no-cache",
+    "Expires": "0",
+}
+
 
 class WebServer:
     """Web server for Sneaky's application.
@@ -61,7 +69,7 @@ class WebServer:
             FileResponse containing the index.html file.
         """
         index_path = os.path.join(self.static_dir, "index.html")
-        return web.FileResponse(index_path)
+        return web.FileResponse(index_path, headers=_NO_CACHE_HEADERS)
 
     async def serve_static_file(self, request: web.Request) -> web.FileResponse:
         """Serve static files from the build directory.
@@ -79,7 +87,11 @@ class WebServer:
         filepath = os.path.join(self.static_dir, filename)
 
         if os.path.exists(filepath) and os.path.isfile(filepath):
-            return web.FileResponse(filepath)
+            # index.html names the hashed asset bundles, so a cached copy pins
+            # the browser to an old build. OBS browser sources in particular
+            # hold onto it forever, which makes deploys look like no-ops.
+            headers = _NO_CACHE_HEADERS if filename.endswith(".html") else None
+            return web.FileResponse(filepath, headers=headers)
         else:
             raise web.HTTPNotFound()
 
