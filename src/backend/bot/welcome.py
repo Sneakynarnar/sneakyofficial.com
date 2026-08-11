@@ -53,6 +53,14 @@ PING_ROLES: dict[str, tuple[int, str, str, str]] = {
         1535819674594320425, "Tournament Team Ping", "🏆",
         "Pinged when looking for a pick-up or recruitment for a tournament team.",
     ),
+    "youtube": (
+        1019293451579293754, "Youtube Ping", "📺",
+        "Pinged when a new YouTube video goes up.",
+    ),
+    "tiktok": (
+        1019293451579293755, "TikTok Ping", "🎵",
+        "Pinged when a new TikTok goes up.",
+    ),
 }
 
 PANEL_BUTTON_ID = "welcome_pings_open"
