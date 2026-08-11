@@ -236,16 +236,16 @@ function useRibbonKeyframes() {
       @keyframes splResetFlash {
         0%, 100% {
           background: rgba(251,146,60,0.16);
-          border-color: rgba(251,146,60,0.55);
-          box-shadow: 0 0 6px rgba(251,146,60,0.35);
+          border-color: rgba(251,146,60,0.60);
+          box-shadow: none;
         }
         50% {
-          background: rgba(251,146,60,0.55);
-          border-color: rgba(251,146,60,1);
-          box-shadow: 0 0 22px rgba(251,146,60,1), 0 0 46px rgba(251,146,60,0.45);
+          background: rgba(251,146,60,0.26);
+          border-color: rgba(251,146,60,0.95);
+          box-shadow: 0 0 10px rgba(251,146,60,0.40);
         }
       }
-      .spl-reset-flash { animation: splResetFlash 1s ease-in-out infinite; }
+      .spl-reset-flash { animation: splResetFlash 2.6s ease-in-out infinite; }
       .spl-ribbon-green-cycle {
         background: linear-gradient(90deg, rgba(16,185,129,0.65), rgba(52,211,153,0.65), rgba(16,185,129,0.65));
         background-size: 200% auto;

@@ -119,16 +119,16 @@ function useMobileKeyframes() {
       @keyframes mobResetFlash {
         0%, 100% {
           background: rgba(251,146,60,0.16);
-          border-color: rgba(251,146,60,0.55);
-          box-shadow: 0 0 6px rgba(251,146,60,0.35);
+          border-color: rgba(251,146,60,0.60);
+          box-shadow: none;
         }
         50% {
-          background: rgba(251,146,60,0.55);
-          border-color: rgba(251,146,60,1);
-          box-shadow: 0 0 24px rgba(251,146,60,1), 0 0 50px rgba(251,146,60,0.45);
+          background: rgba(251,146,60,0.26);
+          border-color: rgba(251,146,60,0.95);
+          box-shadow: 0 0 10px rgba(251,146,60,0.40);
         }
       }
-      .mob-reset-flash { animation: mobResetFlash 1s ease-in-out infinite; }
+      .mob-reset-flash { animation: mobResetFlash 2.6s ease-in-out infinite; }
       .mob-green-cycle {
         background: linear-gradient(90deg, rgba(16,185,129,0.8), rgba(52,211,153,0.8), rgba(16,185,129,0.8));
         background-size: 200% auto;
