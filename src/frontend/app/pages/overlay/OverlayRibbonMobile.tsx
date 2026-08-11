@@ -5,6 +5,8 @@ import { MODES, STAGES } from "../../components/tournament/splatoonData";
 const API_URL  = import.meta.env.VITE_API_URL  ?? "";
 const GUILD_ID = import.meta.env.VITE_GUILD_ID ?? "";
 const DISCORD  = "discord.gg/gmJeQefe5X";
+// Games in the private battle rotation before the lobby is remade
+const ROTATION_LENGTH = 5;
 
 function getWsUrl(): string {
   const base = (API_URL as string) || window.location.origin;
@@ -142,7 +144,7 @@ interface OverlaySettings {
 }
 
 const DEFAULT_SETTINGS: OverlaySettings = {
-  ribbon_mode: "active",
+  ribbon_mode: "open_lobby",
   open_lobby_match_type: "open_battle",
   open_lobby_stage: null,
   open_lobby_mode_id: null,
@@ -156,7 +158,7 @@ const DEFAULT_SETTINGS: OverlaySettings = {
 
 function parseSettings(data: Record<string, unknown>): OverlaySettings {
   return {
-    ribbon_mode:               (data.ribbon_mode as OverlaySettings["ribbon_mode"]) ?? "active",
+    ribbon_mode:               (data.ribbon_mode as OverlaySettings["ribbon_mode"]) ?? "open_lobby",
     open_lobby_match_type:     (data.open_lobby_match_type as OverlaySettings["open_lobby_match_type"]) ?? "open_battle",
     open_lobby_stage:          (data.open_lobby_stage as string | null) ?? null,
     open_lobby_mode_id:        (data.open_lobby_mode_id as string | null) ?? null,
@@ -320,6 +322,7 @@ export default function OverlayRibbonMobile() {
       ? MODES.find(m => m.id === settings.private_rotation_mode_id)
       : null;
     const gamesLeft     = settings.private_games_until_reset;
+    const isLastGame    = gamesLeft <= 1;
 
     const borderColor = isPrivate ? "rgba(145,70,255,0.55)" : "rgba(52,211,153,0.55)";
     const labelColor  = isPrivate ? "rgba(145,70,255,0.90)" : "rgba(52,211,153,0.90)";
@@ -391,17 +394,51 @@ export default function OverlayRibbonMobile() {
           </div>
         )}
 
-        {/* Private battle: where we are in the stream rotation */}
+        {/* Private battle: current mode, then the countdown to the lobby remake */}
         {isPrivate && rotationMode && (
-          <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: "clamp(4px,1.2vw,9px)" }}>
-            <img src={rotationMode.icon} alt={rotationMode.name} style={{ width: "clamp(14px,2.8vh,22px)", height: "clamp(14px,2.8vh,22px)", objectFit: "contain", flexShrink: 0 }} />
-            <div style={{ display: "flex", flexDirection: "column", gap: "clamp(0px,0.2vh,2px)" }}>
+          <>
+            <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: "clamp(4px,1.2vw,9px)" }}>
+              <img src={rotationMode.icon} alt={rotationMode.name} style={{ width: "clamp(14px,2.8vh,22px)", height: "clamp(14px,2.8vh,22px)", objectFit: "contain", flexShrink: 0 }} />
               <span style={{ fontSize: "clamp(11px,1.9vh,17px)", fontWeight: 900, color: "#fff", lineHeight: 1.1, whiteSpace: "nowrap" }}>{rotationMode.name}</span>
-              <span style={{ fontSize: "clamp(7px,1.2vh,11px)", fontWeight: 700, letterSpacing: "0.10em", color: labelColor, whiteSpace: "nowrap" }}>
-                {gamesLeft <= 1 ? "LAST GAME THIS LOBBY" : `${gamesLeft} GAMES TILL RESET`}
-              </span>
             </div>
-          </div>
+
+            {/* Sized like the pool and code cards so it reads at a glance */}
+            <div style={{
+              flexShrink: 0,
+              display: "flex", alignItems: "center", gap: "clamp(5px,1.4vw,10px)",
+              padding: "clamp(3px,0.7vh,7px) clamp(7px,1.8vw,13px)",
+              borderRadius: 8,
+              border: isLastGame ? "2px solid rgba(251,146,60,0.95)" : "2px solid rgba(255,255,255,0.35)",
+              background: isLastGame ? "rgba(251,146,60,0.18)" : "rgba(255,255,255,0.07)",
+            }}>
+              <span style={{
+                fontSize: "clamp(20px,4.4vh,38px)", fontWeight: 900, lineHeight: 1,
+                color: isLastGame ? "rgb(253,186,116)" : "#fff",
+                fontVariantNumeric: "tabular-nums",
+                textShadow: isLastGame ? "0 0 18px rgba(251,146,60,0.9)" : "none",
+              }}>
+                {gamesLeft}
+              </span>
+              <div style={{ display: "flex", flexDirection: "column", gap: "clamp(0px,0.2vh,2px)" }}>
+                <span style={{ fontSize: "clamp(8px,1.05vh,12px)", fontWeight: 900, letterSpacing: "0.16em", textTransform: "uppercase", color: "rgba(255,255,255,0.75)", lineHeight: 1, whiteSpace: "nowrap" }}>
+                  {gamesLeft === 1 ? "GAME LEFT" : "GAMES LEFT"}
+                </span>
+                <span style={{ fontSize: "clamp(7px,0.95vh,11px)", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: isLastGame ? "rgb(253,186,116)" : "rgba(255,255,255,0.40)", lineHeight: 1, whiteSpace: "nowrap" }}>
+                  {isLastGame ? "THEN LOBBY REMAKE" : "TILL LOBBY REMAKE"}
+                </span>
+              </div>
+              {/* One pip per game in the rotation, filled for the ones still to play */}
+              <div style={{ display: "flex", gap: "clamp(2px,0.5vw,4px)" }}>
+                {Array.from({ length: ROTATION_LENGTH }, (_, i) => (
+                  <div key={i} style={{
+                    width: "clamp(4px,0.9vh,7px)", height: "clamp(4px,0.9vh,7px)", borderRadius: 9999,
+                    background: i < gamesLeft ? (isLastGame ? "rgb(251,146,60)" : "rgba(255,255,255,0.85)") : "transparent",
+                    border: i < gamesLeft ? "none" : "1px solid rgba(255,255,255,0.25)",
+                  }} />
+                ))}
+              </div>
+            </div>
+          </>
         )}
 
         {/* Spacer keeps the map pool ticker and stages on the right */}

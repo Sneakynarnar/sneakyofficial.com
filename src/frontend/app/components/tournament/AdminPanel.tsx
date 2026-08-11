@@ -2642,7 +2642,7 @@ const PRIVATE_ROTATION = ["turf_war", "splat_zones", "tower_control", "rainmaker
 
 export function OverlaySettingsSection() {
   const [open, setOpen]           = useState(false);
-  const [ribbonMode, setRibbonMode] = useState<RibbonMode>("active");
+  const [ribbonMode, setRibbonMode] = useState<RibbonMode>("open_lobby");
   const [matchType, setMatchType] = useState<MatchType>("open_battle");
   // Anarchy Open runs one mode across both maps
   const [modeId, setModeId] = useState("");
@@ -2660,7 +2660,7 @@ export function OverlaySettingsSection() {
     if (loaded) return;
     try {
       const { data } = await axios.get(`${API_URL}/api/tournament/overlay/settings`);
-      setRibbonMode(data.ribbon_mode ?? "active");
+      setRibbonMode(data.ribbon_mode ?? "open_lobby");
       setMatchType(data.open_lobby_match_type ?? "open_battle");
       setStage(data.open_lobby_stage ?? "");
       setModeId(data.open_lobby_mode_id ?? "");

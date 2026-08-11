@@ -5,6 +5,8 @@ import { MODES, STAGES } from "../../components/tournament/splatoonData";
 const API_URL  = import.meta.env.VITE_API_URL  ?? "";
 const GUILD_ID = import.meta.env.VITE_GUILD_ID ?? "";
 const DISCORD  = "discord.gg/gmJeQefe5X";
+// Games in the private battle rotation before the lobby is remade
+const ROTATION_LENGTH = 5;
 
 // ── Overlay settings ──────────────────────────────────────────────────────────
 
@@ -24,7 +26,7 @@ interface OverlaySettings {
 }
 
 const DEFAULT_SETTINGS: OverlaySettings = {
-  ribbon_mode: "active",
+  ribbon_mode: "open_lobby",
   open_lobby_match_type: "open_battle",
   open_lobby_stage: null,
   open_lobby_mode_id: null,
@@ -38,7 +40,7 @@ const DEFAULT_SETTINGS: OverlaySettings = {
 
 function parseSettings(data: Record<string, unknown>): OverlaySettings {
   return {
-    ribbon_mode:               (data.ribbon_mode as OverlaySettings["ribbon_mode"]) ?? "active",
+    ribbon_mode:               (data.ribbon_mode as OverlaySettings["ribbon_mode"]) ?? "open_lobby",
     open_lobby_match_type:     (data.open_lobby_match_type as OverlaySettings["open_lobby_match_type"]) ?? "open_battle",
     open_lobby_stage:          (data.open_lobby_stage as string | null) ?? null,
     open_lobby_mode_id:        (data.open_lobby_mode_id as string | null) ?? null,
@@ -570,11 +572,38 @@ export default function OverlayRibbon() {
               </div>
             </div>
             <Divider />
-            <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: "0.15vh" }}>
-              <span style={{ fontSize: "clamp(6px,0.65vw,8px)", fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(255,255,255,0.25)" }}>TILL LOBBY RESET</span>
-              <span style={{ fontSize: "clamp(11px,1.3vw,18px)", fontWeight: 900, color: "rgb(196,150,255)", lineHeight: 1, whiteSpace: "nowrap" }}>
-                {gamesLeft <= 1 ? "LAST GAME" : `${gamesLeft} GAMES`}
+            {/* Countdown to the remake, boxed so it reads at a glance */}
+            <div style={{
+              flexShrink: 0, display: "flex", alignItems: "center", gap: "0.5vw",
+              padding: "0.5vh 0.7vw", borderRadius: 6,
+              border: gamesLeft <= 1 ? "1.5px solid rgba(251,146,60,0.95)" : "1.5px solid rgba(255,255,255,0.30)",
+              background: gamesLeft <= 1 ? "rgba(251,146,60,0.18)" : "rgba(255,255,255,0.06)",
+            }}>
+              <span style={{
+                fontSize: "clamp(16px,2vw,30px)", fontWeight: 900, lineHeight: 1,
+                fontVariantNumeric: "tabular-nums",
+                color: gamesLeft <= 1 ? "rgb(253,186,116)" : "#fff",
+                textShadow: gamesLeft <= 1 ? "0 0 16px rgba(251,146,60,0.9)" : "none",
+              }}>
+                {gamesLeft}
               </span>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.15vh" }}>
+                <span style={{ fontSize: "clamp(6px,0.7vw,9px)", fontWeight: 900, letterSpacing: "0.16em", textTransform: "uppercase", color: "rgba(255,255,255,0.75)", whiteSpace: "nowrap" }}>
+                  {gamesLeft === 1 ? "GAME LEFT" : "GAMES LEFT"}
+                </span>
+                <span style={{ fontSize: "clamp(6px,0.65vw,8px)", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: gamesLeft <= 1 ? "rgb(253,186,116)" : "rgba(255,255,255,0.35)", whiteSpace: "nowrap" }}>
+                  {gamesLeft <= 1 ? "THEN LOBBY REMAKE" : "TILL LOBBY REMAKE"}
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: "0.25vw" }}>
+                {Array.from({ length: ROTATION_LENGTH }, (_, i) => (
+                  <div key={i} style={{
+                    width: "clamp(4px,0.45vw,7px)", height: "clamp(4px,0.45vw,7px)", borderRadius: 9999,
+                    background: i < gamesLeft ? (gamesLeft <= 1 ? "rgb(251,146,60)" : "rgba(255,255,255,0.85)") : "transparent",
+                    border: i < gamesLeft ? "none" : "1px solid rgba(255,255,255,0.25)",
+                  }} />
+                ))}
+              </div>
             </div>
             <Divider />
           </>

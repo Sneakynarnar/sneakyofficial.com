@@ -11,7 +11,8 @@ PRIVATE_ROTATION: list[str] = [
 ]
 
 _settings: dict = {
-    "ribbon_mode": "active",
+    # The stream is in a lobby far more often than in a pinned match
+    "ribbon_mode": "open_lobby",
     "open_lobby_match_type": "open_battle",
     # Anarchy Open runs one mode across both maps, so the mode is shared
     "open_lobby_mode_id": None,
