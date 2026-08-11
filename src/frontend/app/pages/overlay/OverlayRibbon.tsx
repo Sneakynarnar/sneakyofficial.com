@@ -8,6 +8,7 @@ const DISCORD  = "discord.gg/gmJeQefe5X";
 // Games in the private battle rotation before the lobby is remade
 const ROTATION_LENGTH = 5;
 const PRIVATE_BATTLE_ICON = "/S2_Icon_Private_Battle.svg";
+const ANARCHY_OPEN_ICON   = "/S2_Icon_Ranked_Battle.svg";
 
 // ── Overlay settings ──────────────────────────────────────────────────────────
 
@@ -514,19 +515,17 @@ export default function OverlayRibbon() {
           <img src="/android-chrome-512x512.png" alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         </div>
 
-        {/* Private battle mode icon. Its dark parts match the ribbon's own
-            background, so it gets a faint outline to lift it. */}
-        {isPrivate && (
-          <img
-            src={PRIVATE_BATTLE_ICON}
-            alt=""
-            style={{
-              width: "clamp(20px,3vh,34px)", height: "clamp(20px,3vh,34px)",
-              objectFit: "contain", flexShrink: 0,
-              filter: "drop-shadow(0 0 3px rgba(255,255,255,0.55))",
-            }}
-          />
-        )}
+        {/* Match type icon. Both icons have dark parts that match the ribbon's
+            own background, so they get a faint outline to lift them. */}
+        <img
+          src={isPrivate ? PRIVATE_BATTLE_ICON : ANARCHY_OPEN_ICON}
+          alt=""
+          style={{
+            width: "clamp(20px,3vh,34px)", height: "clamp(20px,3vh,34px)",
+            objectFit: "contain", flexShrink: 0,
+            filter: "drop-shadow(0 0 3px rgba(255,255,255,0.55))",
+          }}
+        />
 
         {/* Match type label */}
         <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: "0.2vh" }}>
