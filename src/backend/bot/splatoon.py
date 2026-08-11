@@ -352,24 +352,30 @@ class Splatoon(interactions.Extension):
         if len(wiki_data['game_descriptions']) > 1:
             embed.set_author(name=f"Viewing: {current_game}")
 
+        # Prefer the kit for the game being viewed, falling back to the newest one
+        kit = wiki_data.get('game_kits', {}).get(current_game, {})
+        sub_weapon = kit.get('sub_weapon', wiki_data['sub_weapon'])
+        special_weapon = kit.get('special_weapon', wiki_data['special_weapon'])
+        stats = kit.get('stats', wiki_data['stats'])
+
         # Add kit information
-        if wiki_data['sub_weapon']:
+        if sub_weapon:
             embed.add_field(
                 name="Sub Weapon",
-                value=wiki_data['sub_weapon'],
+                value=sub_weapon,
                 inline=True
             )
 
-        if wiki_data['special_weapon']:
+        if special_weapon:
             embed.add_field(
                 name="Special Weapon",
-                value=wiki_data['special_weapon'],
+                value=special_weapon,
                 inline=True
             )
 
         # Add stats
-        if wiki_data['stats']:
-            stats_text = "\n".join([f"**{key}:** {value}" for key, value in wiki_data['stats'].items()])
+        if stats:
+            stats_text = "\n".join([f"**{key}:** {value}" for key, value in stats.items()])
             embed.add_field(
                 name="Stats",
                 value=stats_text if stats_text else "No stats available",
@@ -430,6 +436,88 @@ class Splatoon(interactions.Extension):
             logger.warning(f"No image found for {weapon_name}")
         return result
 
+    @staticmethod
+    def clean_wiki_value(value: str) -> str:
+        """Turn a raw infobox wikitext value into plain readable text.
+
+        Args:
+            value: The raw value from an infobox parameter.
+
+        Returns:
+            The value with wiki markup removed, or an empty string.
+        """
+        # Split on line breaks first so entries stay separable
+        parts = re.split(r'<br\s*/?>', value)
+        cleaned_parts = []
+
+        for part in parts:
+            # Drop entries that are only there for their icon (Salmon Run rows)
+            if re.search(r'\[\[File:', part, re.IGNORECASE):
+                continue
+
+            # [[Page|Label]] -> Label, [[Page]] -> Page
+            part = re.sub(r'\[\[(?:[^\]|]*\|)?([^\]|]+)\]\]', r'\1', part)
+            # Drop templates and any remaining markup
+            part = re.sub(r'\{\{[^{}]*\}\}', '', part)
+            part = re.sub(r'<ref[^>]*>.*?</ref>', '', part, flags=re.DOTALL)
+            part = re.sub(r'<[^>]+>', '', part)
+            part = re.sub(r"'{2,}", '', part)
+            part = re.sub(r'\s+', ' ', part).strip()
+
+            if part:
+                cleaned_parts.append(part)
+
+        return ", ".join(cleaned_parts)
+
+    @classmethod
+    def parse_weapon_infoboxes(cls, wikitext: str) -> dict:
+        """Extract per-game kit and stat data from a weapon page's wikitext.
+
+        Args:
+            wikitext: The raw wikitext of the weapon page.
+
+        Returns:
+            Mapping of game name to its kit and stats, e.g.
+            {'Splatoon 3': {'sub_weapon': ..., 'special_weapon': ..., 'stats': {...}}}.
+        """
+        # Stat parameters to surface, in display order
+        stat_fields = [
+            ('base', 'Damage'),
+            ('range', 'Range'),
+            ('impact', 'Impact'),
+            ('fire_rate', 'Fire Rate'),
+            ('ink', 'Ink Consumption'),
+        ]
+
+        game_kits = {}
+
+        for infobox_match in re.finditer(r'\{\{Infobox/Weapon\b(.*?)\n\}\}', wikitext, re.DOTALL | re.IGNORECASE):
+            params = {}
+
+            for line in infobox_match.group(1).split('\n|'):
+                if '=' not in line:
+                    continue
+                key, raw_value = line.split('=', 1)
+                params[key.strip().lower()] = raw_value.strip()
+
+            game = cls.clean_wiki_value(params.get('game', ''))
+            if not game:
+                continue
+
+            stats = {}
+            for param, label in stat_fields:
+                value = cls.clean_wiki_value(params.get(param, ''))
+                if value:
+                    stats[label] = value
+
+            game_kits[game] = {
+                'sub_weapon': cls.clean_wiki_value(params.get('sub', '')) or None,
+                'special_weapon': cls.clean_wiki_value(params.get('special', '')) or None,
+                'stats': stats,
+            }
+
+        return game_kits
+
     async def fetch_wiki_data(self, weapon_name: str) -> Optional[dict]:
         """Fetch weapon data from Splatoon Wiki.
 
@@ -441,16 +529,37 @@ class Splatoon(interactions.Extension):
         """
         # Format the weapon name for the URL (replace spaces with underscores)
         formatted_name = weapon_name.replace(" ", "_")
-        wiki_url = f"https://splatoonwiki.org/wiki/{formatted_name}"
+        wiki_url = f"https://splatoonwiki.org/wiki/{quote(formatted_name)}"
+
+        # The article URLs sit behind a bot challenge, so read the rendered
+        # article HTML through the MediaWiki API instead.
+        api_url = "https://splatoonwiki.org/w/api.php"
+        api_params = {
+            "action": "parse",
+            "page": formatted_name,
+            "prop": "text|wikitext",
+            "redirects": "1",
+            "format": "json",
+        }
 
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(wiki_url) as response:
+                async with session.get(api_url, params=api_params) as response:
                     if response.status != 200:
-                        logger.warning(f"Wiki page not found for {weapon_name}")
+                        logger.warning(f"Wiki request failed for {weapon_name} (HTTP {response.status})")
                         return None
 
-                    html = await response.text()
+                    payload = await response.json(content_type=None)
+
+                    if "error" in payload:
+                        logger.warning(f"Wiki page not found for {weapon_name}: {payload['error'].get('code')}")
+                        return None
+
+                    html = payload.get("parse", {}).get("text", {}).get("*")
+
+                    if not html:
+                        logger.warning(f"Wiki page returned no content for {weapon_name}")
+                        return None
 
                     # Extract game-specific descriptions
                     game_descriptions = {}
@@ -551,41 +660,30 @@ class Splatoon(interactions.Extension):
 
                     logger.info(f"Found {len(variants)} variants for {weapon_name}: {[v['name'] for v in variants]}")
 
-                    # Extract stats from infobox
-                    stats = {}
-                    stat_patterns = {
-                        'Range': r'<th[^>]*>Range.*?</th>.*?<td[^>]*>(\d+)/100',
-                        'Damage': r'<th[^>]*>Damage.*?</th>.*?<td[^>]*>(\d+)',
-                        'Fire Rate': r'<th[^>]*>Fire rate.*?</th>.*?<td[^>]*>(\d+)',
-                        'Ink Consumption': r'<th[^>]*>Ink consumption.*?</th>.*?<td[^>]*>([^<]+)',
-                    }
+                    # The rendered infobox is built client side, so kit and stat
+                    # values are only available from the page source.
+                    wikitext = payload.get("parse", {}).get("wikitext", {}).get("*", "")
+                    game_kits = self.parse_weapon_infoboxes(wikitext)
 
-                    for stat_name, pattern in stat_patterns.items():
-                        match = re.search(pattern, html, re.DOTALL | re.IGNORECASE)
-                        if match:
-                            stats[stat_name] = match.group(1).strip()
+                    if not game_kits:
+                        logger.warning(f"No weapon infobox found for {weapon_name}")
 
-                    # Extract kit information (sub and special) for current weapon
-                    sub_weapon = None
-                    special_weapon = None
-
-                    sub_pattern = r'<th[^>]*>Sub</th>.*?<td[^>]*><a[^>]*title="([^"]+)"'
-                    sub_match = re.search(sub_pattern, html, re.DOTALL | re.IGNORECASE)
-                    if sub_match:
-                        sub_weapon = sub_match.group(1)
-
-                    special_pattern = r'<th[^>]*>Special</th>.*?<td[^>]*><a[^>]*title="([^"]+)"'
-                    special_match = re.search(special_pattern, html, re.DOTALL | re.IGNORECASE)
-                    if special_match:
-                        special_weapon = special_match.group(1)
+                    # Fall back to the newest game's kit for callers that want a
+                    # single set of values.
+                    latest_kit = {}
+                    for game in ('Splatoon 3', 'Splatoon 2', 'Splatoon'):
+                        if game in game_kits:
+                            latest_kit = game_kits[game]
+                            break
 
                     return {
                         'name': weapon_name,
                         'game_descriptions': game_descriptions,
                         'variants': variants,
-                        'stats': stats,
-                        'sub_weapon': sub_weapon,
-                        'special_weapon': special_weapon,
+                        'game_kits': game_kits,
+                        'stats': latest_kit.get('stats', {}),
+                        'sub_weapon': latest_kit.get('sub_weapon'),
+                        'special_weapon': latest_kit.get('special_weapon'),
                         'url': wiki_url
                     }
 
