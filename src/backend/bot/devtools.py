@@ -11,7 +11,7 @@ from typing import Optional
 
 import interactions
 from interactions import slash_command, slash_option, slash_default_member_permission, OptionType, Permissions
-from interactions.api.events import CommandError, CommandCompletion, Startup, MemberAdd, Disconnect
+from interactions.api.events import CommandError, CommandCompletion, Startup, Disconnect
 from backend.util import global_config
 from version import __version__
 
@@ -396,27 +396,8 @@ class DevTools(interactions.Extension):
             role.id, ctx.guild.id, added, already_had, failed
         )
 
-    _WELCOME_GUILD   = 1019293451579293747
-    _WELCOME_CHANNEL = 1019293452451725384
-
-    _WELCOME_ROLE    = 1019293451600273538
-
-    @interactions.listen(MemberAdd)
-    async def on_member_join(self, event: MemberAdd) -> None:
-        if int(event.guild_id) != self._WELCOME_GUILD:
-            return
-        member = event.member
-        try:
-            await member.add_role(self._WELCOME_ROLE, guild_id=self._WELCOME_GUILD)
-        except Exception:
-            logger.warning("Failed to assign narnarers role to %s", member.id)
-        channel = self.bot.get_channel(self._WELCOME_CHANNEL)
-        if channel is None:
-            return
-        await channel.send(
-            f"Welcome to the server, {member.mention}! 🦑\n"
-            f"Head over to the channels and introduce yourself. Hope you enjoy your stay!"
-        )
+    # The member-join flow (role assignment, welcome message, welcome DM) lives
+    # in backend.bot.welcome.
 
     @interactions.listen(Disconnect)
     async def on_disconnect(self) -> None:
