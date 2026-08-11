@@ -118,7 +118,7 @@ class Welcome(interactions.Extension):
         """
         for attempt in range(1, _ROLE_RETRIES + 1):
             try:
-                await member.add_role(MEMBER_ROLE_ID, guild_id=GUILD_ID)
+                await member.add_role(MEMBER_ROLE_ID, reason="New member")
                 return True
             except Exception as e:
                 logger.warning(
@@ -208,7 +208,7 @@ class Welcome(interactions.Extension):
         added = 0
         for member in missing:
             try:
-                await member.add_role(MEMBER_ROLE_ID, guild_id=GUILD_ID, reason="Member role backfill")
+                await member.add_role(MEMBER_ROLE_ID, reason="Member role backfill")
                 added += 1
             except Exception as e:
                 logger.error("Backfill failed to give the member role to %s: %s", member.id, e)
@@ -263,10 +263,10 @@ class Welcome(interactions.Extension):
                 continue
             try:
                 if wanted:
-                    await member.add_role(role_id, guild_id=GUILD_ID, reason="Ping role self-assign")
+                    await member.add_role(role_id, reason="Ping role self-assign")
                     added.append(label)
                 else:
-                    await member.remove_role(role_id, guild_id=GUILD_ID, reason="Ping role self-removal")
+                    await member.remove_role(role_id, reason="Ping role self-removal")
                     removed.append(label)
             except Exception as e:
                 logger.error("Failed to toggle ping role %s for %s: %s", role_id, member.id, e)

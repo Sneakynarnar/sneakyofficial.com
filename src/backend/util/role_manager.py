@@ -42,10 +42,10 @@ class RoleManager:
                 return
             for role_id in RANK_ROLES.values():
                 try:
-                    await member.remove_role(role_id, guild_id=_RANK_GUILD)
+                    await member.remove_role(role_id, reason="Rank role sync")
                 except Exception:
                     pass
             if rank is not None and rank in RANK_ROLES:
-                await member.add_role(RANK_ROLES[rank], guild_id=_RANK_GUILD)
+                await member.add_role(RANK_ROLES[rank], reason="Rank role sync")
         except Exception:
             logger.warning("Failed to apply rank roles for discord_id=%s rank=%s", discord_id, rank)
