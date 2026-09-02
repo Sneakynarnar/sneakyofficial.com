@@ -9,11 +9,13 @@ Reactions on an accepted submission mean:
 
 * ✅ — the bot read this as a suggestion
 * 👁️ — an admin still has to review it
-* ☑️ — reviewed, and at least one suggestion from it is in the pool
+* ☑️ — reviewed, and everything in it went into the pool
+* 🔶 ❌ — some of it went in and some of it didn't
 * ❌ — the bot could not read the message, or nothing in it was approved
 
-So a fresh submission shows ✅ 👁️ and settles into ✅ ☑️ or ✅ ❌. Only those four
-emoji are managed here, and a human reacting with anything else is left alone.
+So a fresh submission shows ✅ 👁️ and settles into ✅ ☑️, ✅ 🔶 ❌ or ✅ ❌. Only
+those five emoji are managed here, and a human reacting with anything else is
+left alone.
 """
 import logging
 from typing import Any, Optional
@@ -28,10 +30,12 @@ logger = logging.getLogger("BingoNotifier")
 ACCEPTED_EMOJI = "✅"
 REVIEW_EMOJI = "👁️"
 APPROVED_EMOJI = "☑️"
+PARTIAL_EMOJI = "🔶"
 REJECTED_EMOJI = "❌"
 
 # The bot only ever adds or removes these, never anything a member added.
-MANAGED_EMOJI = (ACCEPTED_EMOJI, REVIEW_EMOJI, APPROVED_EMOJI, REJECTED_EMOJI)
+MANAGED_EMOJI = (ACCEPTED_EMOJI, REVIEW_EMOJI, APPROVED_EMOJI,
+                 PARTIAL_EMOJI, REJECTED_EMOJI)
 
 # How long the in-channel fallback stays up when a member's DMs are closed.
 FALLBACK_REPLY_TTL = 120
@@ -44,6 +48,10 @@ def wanted_reactions(state: dict[str, Any]) -> set[str]:
     wanted = {ACCEPTED_EMOJI}
     if state["pending"]:
         wanted.add(REVIEW_EMOJI)
+    elif state["approved"] and state["rejected"]:
+        # A mixed result says two things, so it gets two marks: the diamond for
+        # "some of this is in", the cross for "some of it isn't".
+        wanted.update({PARTIAL_EMOJI, REJECTED_EMOJI})
     elif state["approved"]:
         wanted.add(APPROVED_EMOJI)
     else:

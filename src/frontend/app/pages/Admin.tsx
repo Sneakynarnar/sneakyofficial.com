@@ -193,146 +193,152 @@ export default function Admin() {
       </Helmet>
 
       <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Page header */}
-        <div className="flex items-center gap-3 mb-6 flex-wrap">
-          <Link to="/" className="text-slate-500 hover:text-slate-300 transition-colors shrink-0" title="Back to site">
-            <ChevronLeft className="w-5 h-5" />
-          </Link>
-          <Gauge className="w-6 h-6 text-indigo-400 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-bold text-white leading-tight">Admin Dashboard</h1>
-            <p className="text-xs text-slate-400 truncate">
-              {tournament && !noTournament ? (
-                <>
-                  {tournament.name}
-                  <StatusPill status={tournament.status} />
-                </>
-              ) : (
-                "No active tournament"
-              )}
-            </p>
+        {/* One translucent slab holds the whole dashboard, so the animated
+            background reads through it as a single surface rather than through
+            a scatter of separate cards. */}
+        <div className="rounded-2xl border border-white/10 bg-slate-900/50 backdrop-blur-xl shadow-2xl shadow-black/40 p-4 sm:p-6">
+
+          {/* Page header */}
+          <div className="flex items-center gap-3 pb-4 mb-6 border-b border-white/10 flex-wrap">
+            <Link to="/" className="text-slate-500 hover:text-slate-300 transition-colors shrink-0" title="Back to site">
+              <ChevronLeft className="w-5 h-5" />
+            </Link>
+            <Gauge className="w-6 h-6 text-indigo-400 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <h1 className="text-xl font-bold text-white leading-tight">Admin Dashboard</h1>
+              <p className="text-xs text-slate-400 truncate">
+                {tournament && !noTournament ? (
+                  <>
+                    {tournament.name}
+                    <StatusPill status={tournament.status} />
+                  </>
+                ) : (
+                  "No active tournament"
+                )}
+              </p>
+            </div>
+            {tournament?.special_rules && (
+              <span className={`text-xs px-2 py-0.5 rounded-full border font-medium shrink-0 ${
+                tournament.affects_rating === false
+                  ? "bg-amber-900/30 text-amber-300 border-amber-600/40"
+                  : "bg-blue-900/30 text-blue-300 border-blue-600/40"
+              }`}>
+                {tournament.affects_rating === false ? "Special rules · no rating" : "Special rules"}
+              </span>
+            )}
           </div>
-          {tournament?.special_rules && (
-            <span className={`text-xs px-2 py-0.5 rounded-full border font-medium shrink-0 ${
-              tournament.affects_rating === false
-                ? "bg-amber-900/30 text-amber-300 border-amber-600/40"
-                : "bg-blue-900/30 text-blue-300 border-blue-600/40"
-            }`}>
-              {tournament.affects_rating === false ? "Special rules · no rating" : "Special rules"}
-            </span>
+
+          {flashMsg && (
+            <div className={`mb-4 text-sm px-3 py-2 rounded border ${
+              flashMsg.ok ? "bg-green-900/40 text-green-300 border-green-700/40"
+                          : "bg-red-900/40 text-red-300 border-red-700/40"}`}>
+              {flashMsg.text}
+            </div>
           )}
-        </div>
 
-        {flashMsg && (
-          <div className={`mb-4 text-sm px-3 py-2 rounded border ${
-            flashMsg.ok ? "bg-green-900/40 text-green-300 border-green-700/40"
-                        : "bg-red-900/40 text-red-300 border-red-700/40"}`}>
-            {flashMsg.text}
-          </div>
-        )}
-
-        <div className="grid lg:grid-cols-[220px_1fr] gap-6">
-          {/* Sidebar */}
-          <nav className="lg:sticky lg:top-6 lg:self-start">
-            <div className="flex lg:flex-col gap-4 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0">
-              {NAV.map((group) => {
-                const items = group.items.filter(isVisible);
-                if (items.length === 0) return null;
-                return (
-                  <div key={group.group} className="shrink-0 lg:shrink">
-                    <p className="hidden lg:block text-[10px] uppercase tracking-wider text-slate-600 font-semibold px-2 mb-1">
-                      {group.group}
-                    </p>
-                    <div className="flex lg:flex-col gap-1">
-                      {items.map(({ id, label, icon: Icon }) => (
-                        <button
-                          key={id}
-                          onClick={() => setSection(id)}
-                          className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
-                            activeSection === id
-                              ? "bg-indigo-600/20 text-indigo-200 border border-indigo-500/40"
-                              : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-transparent"
-                          }`}
-                        >
-                          <Icon className="w-4 h-4 shrink-0" />
-                          {label}
-                        </button>
-                      ))}
+          <div className="grid lg:grid-cols-[220px_1fr] gap-6">
+            {/* Sidebar */}
+            <nav className="lg:sticky lg:top-6 lg:self-start">
+              <div className="flex lg:flex-col gap-4 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0">
+                {NAV.map((group) => {
+                  const items = group.items.filter(isVisible);
+                  if (items.length === 0) return null;
+                  return (
+                    <div key={group.group} className="shrink-0 lg:shrink">
+                      <p className="hidden lg:block text-[10px] uppercase tracking-wider text-slate-600 font-semibold px-2 mb-1">
+                        {group.group}
+                      </p>
+                      <div className="flex lg:flex-col gap-1">
+                        {items.map(({ id, label, icon: Icon }) => (
+                          <button
+                            key={id}
+                            onClick={() => setSection(id)}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
+                              activeSection === id
+                                ? "bg-indigo-600/20 text-indigo-200 border border-indigo-500/40"
+                                : "text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent"
+                            }`}
+                          >
+                            <Icon className="w-4 h-4 shrink-0" />
+                            {label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          </nav>
-
-          {/* Content */}
-          <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 backdrop-blur-sm p-6 min-w-0">
-            <div className="mb-6">
-              <h2 className="text-lg font-bold text-white">{meta.title}</h2>
-              <p className="text-xs text-slate-500">{meta.blurb}</p>
-            </div>
-
-            {activeSection === "overview" && (
-              <Overview
-                tournament={noTournament ? null : tournament}
-                signupCount={signups.length}
-                bingoStats={bingoStats}
-                onGo={setSection}
-              />
-            )}
-
-            {activeSection === "organise" && (
-              <AdminPanel
-                tournament={tournament ?? { id: 0, name: "No active tournament", status: "signup" }}
-                signups={tournament ? signups : []}
-                preTeams={tournament ? preTeams : []}
-                onRefresh={fetchAll}
-                onCancel={fetchAll}
-              />
-            )}
-
-            {activeSection === "matches" && (
-              <AdminMatchReporter onRefresh={fetchAll} flash={flash} />
-            )}
-
-            {activeSection === "schedule" && !noTournament && (
-              <div className="flex flex-col gap-8">
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2">
-                    <MapIcon className="w-4 h-4 text-slate-400" /> Round Schedule
-                  </h3>
-                  <RoundScheduleSection
-                    tournamentId={tournament!.id}
-                    signupCount={signups.length}
-                    teamSize={tournament?.team_size ?? 4}
-                    initialOpen
-                  />
-                </div>
-                <div className="border-t border-slate-700/40 pt-6">
-                  <h3 className="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2">
-                    <MapIcon className="w-4 h-4 text-slate-400" /> Map Pool Presets
-                  </h3>
-                  <p className="text-xs text-slate-500 mb-4">
-                    Save named map pools (e.g. "Competitive", "Meme") and apply them to the tournament in one click.
-                  </p>
-                  <MapPoolPresetsSection tournamentId={tournament!.id} />
-                </div>
-                <div className="border-t border-slate-700/40 pt-6">
-                  <h3 className="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2">
-                    <MapIcon className="w-4 h-4 text-slate-400" /> Map Pool
-                  </h3>
-                  <p className="text-xs text-slate-500 mb-4">
-                    Restrict which stages players can choose for each mode. Leave a mode empty to allow all stages.
-                  </p>
-                  <MapPoolSection tournamentId={tournament!.id} initialOpen />
-                </div>
+                  );
+                })}
               </div>
-            )}
+            </nav>
 
-            {activeSection === "players"  && <PlayerProfilesSection />}
-            {activeSection === "bingo"    && <BingoSection />}
-            {activeSection === "overlay"  && <OverlaySettingsSection />}
-            {activeSection === "splatdle" && <SplatdleActivitySection />}
+            {/* Content */}
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5 sm:p-6 min-w-0">
+              <div className="mb-6">
+                <h2 className="text-lg font-bold text-white">{meta.title}</h2>
+                <p className="text-xs text-slate-500">{meta.blurb}</p>
+              </div>
+
+              {activeSection === "overview" && (
+                <Overview
+                  tournament={noTournament ? null : tournament}
+                  signupCount={signups.length}
+                  bingoStats={bingoStats}
+                  onGo={setSection}
+                />
+              )}
+
+              {activeSection === "organise" && (
+                <AdminPanel
+                  tournament={tournament ?? { id: 0, name: "No active tournament", status: "signup" }}
+                  signups={tournament ? signups : []}
+                  preTeams={tournament ? preTeams : []}
+                  onRefresh={fetchAll}
+                  onCancel={fetchAll}
+                />
+              )}
+
+              {activeSection === "matches" && (
+                <AdminMatchReporter onRefresh={fetchAll} flash={flash} />
+              )}
+
+              {activeSection === "schedule" && !noTournament && (
+                <div className="flex flex-col gap-8">
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2">
+                      <MapIcon className="w-4 h-4 text-slate-400" /> Round Schedule
+                    </h3>
+                    <RoundScheduleSection
+                      tournamentId={tournament!.id}
+                      signupCount={signups.length}
+                      teamSize={tournament?.team_size ?? 4}
+                      initialOpen
+                    />
+                  </div>
+                  <div className="border-t border-slate-700/40 pt-6">
+                    <h3 className="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2">
+                      <MapIcon className="w-4 h-4 text-slate-400" /> Map Pool Presets
+                    </h3>
+                    <p className="text-xs text-slate-500 mb-4">
+                      Save named map pools (e.g. "Competitive", "Meme") and apply them to the tournament in one click.
+                    </p>
+                    <MapPoolPresetsSection tournamentId={tournament!.id} />
+                  </div>
+                  <div className="border-t border-slate-700/40 pt-6">
+                    <h3 className="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2">
+                      <MapIcon className="w-4 h-4 text-slate-400" /> Map Pool
+                    </h3>
+                    <p className="text-xs text-slate-500 mb-4">
+                      Restrict which stages players can choose for each mode. Leave a mode empty to allow all stages.
+                    </p>
+                    <MapPoolSection tournamentId={tournament!.id} initialOpen />
+                  </div>
+                </div>
+              )}
+
+              {activeSection === "players"  && <PlayerProfilesSection />}
+              {activeSection === "bingo"    && <BingoSection />}
+              {activeSection === "overlay"  && <OverlaySettingsSection />}
+              {activeSection === "splatdle" && <SplatdleActivitySection />}
+            </div>
           </div>
         </div>
       </div>

@@ -16,7 +16,8 @@ Reactions track how far along a submission is:
 
 * ✅ — the bot read this as a suggestion
 * 👁️ — an admin still has to review it
-* ☑️ — reviewed, and at least one suggestion from it is in the pool
+* ☑️ — reviewed, and everything in it went into the pool
+* 🔶 ❌ — some of it went in and some of it didn't
 * ❌ — the bot could not read the message, or nothing in it was approved
 
 On startup the bot reads back through the channel from the rules message and
@@ -138,7 +139,9 @@ def _rules_embed() -> Embed:
         "What the reactions mean",
         f"{notifier.ACCEPTED_EMOJI} I read this as a suggestion\n"
         f"{notifier.REVIEW_EMOJI} waiting on a human to review it\n"
-        f"{notifier.APPROVED_EMOJI} approved and in the pool\n"
+        f"{notifier.APPROVED_EMOJI} all of it made it into the pool\n"
+        f"{notifier.PARTIAL_EMOJI} {notifier.REJECTED_EMOJI} some of it made it, "
+        "some of it didn't\n"
         f"{notifier.REJECTED_EMOJI} I couldn't read it, or none of it was approved\n\n"
         "If a suggestion is turned down I'll DM you why, and it won't count "
         f"towards your {MAX_PER_PERSON}.",

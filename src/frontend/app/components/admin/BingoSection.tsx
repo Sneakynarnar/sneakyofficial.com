@@ -207,7 +207,8 @@ function ResyncBar({ onDone, flash }: { onDone: () => void; flash: (t: string, o
       <p className="text-xs text-slate-400 flex-1 min-w-[220px]">
         The bot catches up automatically on startup. Run this to pull in anything posted
         since and go back over every submission correcting its reactions
-        (✅ read · 👁️ awaiting review · ☑️ approved · ❌ nothing approved).
+        (✅ read · 👁️ awaiting review · ☑️ all approved · 🔶❌ partly approved ·
+        ❌ nothing approved).
       </p>
       <label className="flex items-center gap-1.5 text-xs text-slate-400">
         <input
