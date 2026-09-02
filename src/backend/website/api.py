@@ -23,6 +23,10 @@ logger = logging.getLogger("API")
 _name_cache: Dict[int, Any] = {}
 _NAME_CACHE_TTL = 3600
 
+# An average over one or two games says nothing, and the weighting alone still
+# lets a lucky first game near the top. Ranking is for players with a record.
+LEADERBOARD_MIN_GAMES = 10
+
 
 def verify_tournament_admin(func: Callable) -> Callable:
     """Decorator that checks Discord auth and confirms the user is a tournament admin."""
@@ -1235,6 +1239,10 @@ class SneakyApi:
         bot can never disagree. Only players who logged in and finished a daily
         game are in here — the game itself is playable anonymously.
 
+        The global table only lists players with LEADERBOARD_MIN_GAMES games
+        behind them. Today's lists everyone who finished today, newcomers
+        included: it is a record of the day, not a ranking of averages.
+
         Query:
             scope: "global" (default) or "today".
             limit: 1-100, default 25.
@@ -1256,13 +1264,14 @@ class SneakyApi:
                     )
                 else:
                     # Same weighting as the bot: a low average only counts once
-                    # you have the games to back it up.
+                    # you have the games to back it up. The gate on top of it
+                    # keeps the table to players with a real record.
                     await cur.execute(
                         "SELECT discord_id, average_guess_count, streak, times_played, "
                         "       (average_guess_count + 4.0 / SQRT(times_played)) AS weighted "
-                        "FROM UserStats WHERE times_played > 0 "
+                        "FROM UserStats WHERE times_played >= %s "
                         "ORDER BY weighted ASC LIMIT %s",
-                        (limit,),
+                        (LEADERBOARD_MIN_GAMES, limit),
                     )
                 records = await cur.fetchall()
         except Exception:
@@ -1291,7 +1300,11 @@ class SneakyApi:
                 entry["timesPlayed"] = int(r["times_played"])
             entries.append(entry)
 
-        return web.json_response({"scope": scope, "entries": entries})
+        return web.json_response({
+            "scope": scope,
+            "entries": entries,
+            "minGames": LEADERBOARD_MIN_GAMES if scope == "global" else 0,
+        })
 
     async def _resolve_discord_names(self, discord_ids: list) -> Dict[int, Dict[str, Any]]:
         """Turn Discord ids into usernames and avatars for a leaderboard page.
