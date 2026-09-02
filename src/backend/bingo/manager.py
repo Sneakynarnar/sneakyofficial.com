@@ -31,9 +31,51 @@ MAX_PER_PERSON = 10
 MIN_LENGTH = 5
 MAX_LENGTH = 200
 
-# "1. thing", "2) thing", "3 - thing" and friends. Anything else in the message
-# is treated as prose and ignored.
-_NUMBERED_LINE = re.compile(r"^\s*[*\-•]?\s*(\d{1,2})\s*[.)\]:\-]\s*(.+?)\s*$")
+# Why a suggestion was turned down. The label names it, the explanation is what
+# the submitter reads, so it is written to them rather than about them.
+REJECT_CATEGORIES: dict[str, dict[str, str]] = {
+    "clarification": {
+        "label": "Needs more clarification",
+        "explanation": (
+            "We weren't quite sure what this one is asking for. Word it a little "
+            "more precisely and it's welcome back."
+        ),
+    },
+    "too_easy": {
+        "label": "Too easy",
+        "explanation": (
+            "This would be over too quickly to make an interesting square."
+        ),
+    },
+    "too_time_consuming": {
+        "label": "Too time consuming",
+        "explanation": (
+            "This would eat a lot of time for a single square, and we'd rather "
+            "not spend hours grinding one out."
+        ),
+    },
+    "unattainable": {
+        "label": "Requires potentially unattainable conditions",
+        "explanation": (
+            "This leans on something we might not be able to make happen, so it "
+            "could end up impossible to tick off."
+        ),
+    },
+    "other": {
+        "label": "Other",
+        "explanation": "",
+    },
+}
+
+# The three shapes a list of suggestions turns up in. Numbered lines win when
+# present because they are the most deliberate; bullets come next; failing both,
+# every line is taken as its own suggestion.
+_NUMBERED_LINE = re.compile(r"^\s*[*\-•]?\s*(\d{1,2})\s*[.)\]:\-]\s*(?!\d)(.+?)\s*$")
+_BULLET_LINE = re.compile(r"^\s*[-*•·–—>+]+\s*(.+?)\s*$")
+
+# A line like "Here are my suggestions:" introduces the list rather than being
+# part of it, so it is dropped when nothing more explicit marks the entries.
+_HEADING_LINE = re.compile(r"^.{0,60}:\s*$")
 
 # Discord decorations that add nothing to a challenge once it is on a card.
 _MENTION = re.compile(r"<@[!&]?\d+>|<#\d+>")
@@ -48,32 +90,55 @@ def _clean(text: str) -> str:
     return " ".join(text.split())
 
 
+def _extract(content: str) -> list[str]:
+    """Pull the individual suggestions out of a message, however it is laid out.
+
+    People write these lists three ways: numbered, bulleted, or one per line
+    with no marker at all. Numbered entries are looked for first because they
+    are unambiguous, then bullets, and only if neither appears is every line
+    taken at face value.
+    """
+    lines = [line for line in (content or "").splitlines() if line.strip()]
+
+    numbered = [_clean(m.group(2)) for m in
+                (_NUMBERED_LINE.match(line) for line in lines) if m]
+    if numbered:
+        return numbered
+
+    bulleted = [_clean(m.group(1)) for m in
+                (_BULLET_LINE.match(line) for line in lines) if m]
+    if bulleted:
+        return bulleted
+
+    # Bare lines. Drop a leading "my suggestions:" style heading, which is the
+    # one bit of preamble common enough to be worth recognising.
+    plain = [_clean(line) for line in lines]
+    if len(plain) > 1 and _HEADING_LINE.match(plain[0]):
+        plain = plain[1:]
+    return [line for line in plain if line]
+
+
 def parse_submission(content: str) -> tuple[bool, Optional[str], list[str]]:
-    """Pull the numbered suggestions out of a submission message.
+    """Pull the suggestions out of a submission message.
+
+    Numbered lists, bulleted lists and one-per-line all work. How many is too
+    many depends on how much of their allowance the member has left, so that
+    check lives in :meth:`BingoManager.record_submission` rather than here.
 
     Args:
         content: The raw message content.
-
-    How many is too many depends on how much of their allowance the member has
-    left, so that check lives in :meth:`BingoManager.record_submission` rather
-    than here.
 
     Returns:
         (ok, error, suggestions). When ok is False, error explains what the
         member needs to change and suggestions is empty.
     """
-    lines = [line for line in (content or "").splitlines() if line.strip()]
-    found: list[str] = []
-    for line in lines:
-        match = _NUMBERED_LINE.match(line)
-        if match:
-            found.append(_clean(match.group(2)))
+    found = _extract(content)
 
     if not found:
         return False, (
-            "I couldn't find any numbered suggestions in that message. Please "
-            "format them like:\n```\n1. First suggestion\n2. Second suggestion\n"
-            "3. Third suggestion\n```"
+            "I couldn't find any suggestions in that message. Put each one on "
+            "its own line, numbered or bulleted if you like:\n```\n"
+            "1. First suggestion\n2. Second suggestion\n```"
         ), []
 
     seen: set[str] = set()
@@ -106,6 +171,7 @@ _TABLES = (
          used TINYINT NOT NULL DEFAULT 0,
          used_card_id INT DEFAULT NULL,
          status VARCHAR(10) NOT NULL DEFAULT 'pending',
+         reject_category VARCHAR(32) DEFAULT NULL,
          reject_reason VARCHAR(300) DEFAULT NULL,
          reviewed_at DATETIME DEFAULT NULL,
          reviewed_by BIGINT DEFAULT NULL,
@@ -120,7 +186,6 @@ _TABLES = (
          discord_id BIGINT NOT NULL,
          display_name VARCHAR(100) NOT NULL,
          accepted_count TINYINT NOT NULL DEFAULT 0,
-         thread_id BIGINT DEFAULT NULL,
          notified_ids VARCHAR(255) DEFAULT NULL,
          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
          PRIMARY KEY (message_id),
@@ -142,10 +207,10 @@ _TABLES = (
 # already being there.
 _COLUMNS = (
     "ALTER TABLE bingo_suggestions ADD COLUMN status VARCHAR(10) NOT NULL DEFAULT 'pending'",
+    "ALTER TABLE bingo_suggestions ADD COLUMN reject_category VARCHAR(32) DEFAULT NULL",
     "ALTER TABLE bingo_suggestions ADD COLUMN reject_reason VARCHAR(300) DEFAULT NULL",
     "ALTER TABLE bingo_suggestions ADD COLUMN reviewed_at DATETIME DEFAULT NULL",
     "ALTER TABLE bingo_suggestions ADD COLUMN reviewed_by BIGINT DEFAULT NULL",
-    "ALTER TABLE bingo_submission_messages ADD COLUMN thread_id BIGINT DEFAULT NULL",
     "ALTER TABLE bingo_submission_messages ADD COLUMN notified_ids VARCHAR(255) DEFAULT NULL",
 )
 
@@ -320,7 +385,7 @@ class BingoManager:
         query = """SELECT s.id, s.guild_id, s.discord_id, s.display_name, s.position,
                           s.suggestion, s.excluded, s.used, s.used_card_id,
                           s.message_id, s.channel_id, s.created_at,
-                          s.status, s.reject_reason, s.reviewed_at,
+                          s.status, s.reject_category, s.reject_reason, s.reviewed_at,
                           c.name AS used_card_name
                    FROM bingo_suggestions s
                    LEFT JOIN bingo_cards c ON c.id = s.used_card_id"""
@@ -419,6 +484,7 @@ class BingoManager:
 
     @staticmethod
     async def set_status(suggestion_ids: list[int], status: str,
+                         category: Optional[str] = None,
                          reason: Optional[str] = None,
                          admin_id: Optional[int] = None) -> tuple[bool, str, list[int]]:
         """Approve or reject suggestions, or send them back to pending.
@@ -426,8 +492,10 @@ class BingoManager:
         Args:
             suggestion_ids: Suggestions to update.
             status: One of pending, approved or rejected.
-            reason: Why it was rejected. Required for rejections, since this is
-                what gets posted back to the submitter in a thread.
+            category: Which of REJECT_CATEGORIES applies. Required for
+                rejections, since it is what the submitter is told.
+            reason: Optional extra detail to go with the category, and the
+                whole explanation when the category is "other".
             admin_id: Who made the call, kept for the audit trail.
 
         Returns:
@@ -440,10 +508,16 @@ class BingoManager:
             return False, "Nothing selected.", []
 
         clean_reason: Optional[str] = None
+        clean_category: Optional[str] = None
         if status == "rejected":
-            clean_reason = " ".join((reason or "").split())[:300]
-            if len(clean_reason) < 3:
-                return False, "Rejecting a suggestion needs a reason to send back.", []
+            clean_category = (category or "").strip()
+            if clean_category not in REJECT_CATEGORIES:
+                return False, "Pick a reason for turning this one down.", []
+            clean_reason = " ".join((reason or "").split())[:300] or None
+            # Every other category explains itself; "other" only says what the
+            # admin writes, so it cannot be left blank.
+            if clean_category == "other" and not clean_reason:
+                return False, "\"Other\" needs a note explaining the decision.", []
 
         await ensure_tables()
         placeholders = ", ".join(["%s"] * len(suggestion_ids))
@@ -456,15 +530,17 @@ class BingoManager:
 
             if status == "pending":
                 await cur.execute(
-                    "UPDATE bingo_suggestions SET status = 'pending', reject_reason = NULL, "
-                    f"reviewed_at = NULL, reviewed_by = NULL WHERE id IN ({placeholders})",
+                    "UPDATE bingo_suggestions SET status = 'pending', reject_category = NULL, "
+                    "reject_reason = NULL, reviewed_at = NULL, reviewed_by = NULL "
+                    f"WHERE id IN ({placeholders})",
                     tuple(suggestion_ids)
                 )
             else:
                 await cur.execute(
-                    "UPDATE bingo_suggestions SET status = %s, reject_reason = %s, "
-                    f"reviewed_at = NOW(), reviewed_by = %s WHERE id IN ({placeholders})",
-                    (status, clean_reason, admin_id, *suggestion_ids)
+                    "UPDATE bingo_suggestions SET status = %s, reject_category = %s, "
+                    "reject_reason = %s, reviewed_at = NOW(), reviewed_by = %s "
+                    f"WHERE id IN ({placeholders})",
+                    (status, clean_category, clean_reason, admin_id, *suggestion_ids)
                 )
             changed = cur.rowcount
 
@@ -500,8 +576,8 @@ class BingoManager:
         await ensure_tables()
         async with DBContextManager(use_dict=True) as cur:
             await cur.execute(
-                """SELECT id, position, suggestion, status, reject_reason,
-                          display_name, discord_id, channel_id, guild_id
+                """SELECT id, position, suggestion, status, reject_category,
+                          reject_reason, display_name, discord_id, channel_id, guild_id
                    FROM bingo_suggestions WHERE message_id = %s ORDER BY position""",
                 (message_id,)
             )
@@ -510,7 +586,7 @@ class BingoManager:
                 return None
 
             await cur.execute(
-                "SELECT thread_id, notified_ids FROM bingo_submission_messages WHERE message_id = %s",
+                "SELECT notified_ids FROM bingo_submission_messages WHERE message_id = %s",
                 (message_id,)
             )
             submitter = await cur.fetchone()
@@ -525,7 +601,6 @@ class BingoManager:
             "guild_id": int(rows[0]["guild_id"]),
             "discord_id": int(rows[0]["discord_id"]),
             "display_name": rows[0]["display_name"],
-            "thread_id": int(submitter["thread_id"]) if submitter and submitter["thread_id"] else None,
             "total": len(rows),
             "pending": [r for r in rows if r["status"] == "pending"],
             "approved": [r for r in rows if r["status"] == "approved"],
@@ -572,12 +647,12 @@ class BingoManager:
         return known
 
     @staticmethod
-    async def record_feedback(message_id: int, thread_id: int,
-                              reported_ids: list[int]) -> None:
-        """Note the feedback thread and which rejections it has explained.
+    async def record_feedback(message_id: int, reported_ids: list[int]) -> None:
+        """Note which rejections the submitter has now been told about.
 
-        Keeping the reported IDs means only one thread is ever created and each
-        rejection is explained exactly once, however many review passes it takes.
+        Keeping the reported IDs means each rejection is explained exactly once,
+        however many review passes it takes, and that a delivery that failed is
+        retried on the next sync rather than being lost.
         """
         await ensure_tables()
         async with DBContextManager(use_dict=True) as cur:
@@ -589,9 +664,9 @@ class BingoManager:
             known = {x for x in (row["notified_ids"] or "").split(",") if x.strip()} if row else set()
             known.update(str(i) for i in reported_ids)
             await cur.execute(
-                "UPDATE bingo_submission_messages SET thread_id = %s, notified_ids = %s "
+                "UPDATE bingo_submission_messages SET notified_ids = %s "
                 "WHERE message_id = %s",
-                (thread_id, ",".join(sorted(known))[:255], message_id)
+                (",".join(sorted(known))[:255], message_id)
             )
 
     # ------------------------------------------------------------------ #

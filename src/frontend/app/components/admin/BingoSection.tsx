@@ -23,6 +23,7 @@ interface Suggestion {
   position: number;
   suggestion: string;
   status: Status;
+  reject_category: string | null;
   reject_reason: string | null;
   reviewed_at: string | null;
   excluded: boolean;
@@ -54,6 +55,12 @@ interface Stats {
   cards: number;
 }
 
+interface RejectCategory {
+  id: string;
+  label: string;
+  explanation: string;
+}
+
 type Filter = "pending" | "available" | "rejected" | "excluded" | "used" | "all";
 
 const FILTERS: { id: Filter; label: string }[] = [
@@ -74,6 +81,7 @@ export default function BingoSection() {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [cards, setCards]             = useState<SavedCard[]>([]);
   const [stats, setStats]             = useState<Stats | null>(null);
+  const [categories, setCategories]   = useState<RejectCategory[]>([]);
   const [loading, setLoading]         = useState(true);
   const [msg, setMsg]                 = useState<{ text: string; ok: boolean } | null>(null);
 
@@ -91,6 +99,7 @@ export default function BingoSection() {
       setSuggestions(data.suggestions ?? []);
       setCards(data.cards ?? []);
       setStats(data.stats ?? null);
+      setCategories(data.reject_categories ?? []);
     } catch {
       flash("Couldn't load the bingo pool.", false);
     } finally {
@@ -124,7 +133,12 @@ export default function BingoSection() {
 
       <CardStudio suggestions={suggestions} onSaved={load} flash={flash} />
 
-      <SuggestionPool suggestions={suggestions} onChanged={load} flash={flash} />
+      <SuggestionPool
+        suggestions={suggestions}
+        categories={categories}
+        onChanged={load}
+        flash={flash}
+      />
 
       {cards.length > 0 && <SavedCards cards={cards} onChanged={load} flash={flash} />}
     </div>
@@ -182,7 +196,8 @@ function ResyncBar({ onDone, flash }: { onDone: () => void; flash: (t: string, o
     <div className="flex flex-wrap items-center gap-3 px-3 py-2 rounded-lg bg-slate-900/40 border border-slate-700/40">
       <p className="text-xs text-slate-400 flex-1 min-w-[220px]">
         The bot catches up automatically on startup. Run this to pull in anything posted
-        since and repair the ✅ / 👁️ reactions on every submission.
+        since and go back over every submission correcting its reactions
+        (✅ read · 👁️ awaiting review · ☑️ approved · ❌ nothing approved).
       </p>
       <button onClick={resync} disabled={busy} className={miniButton}>
         {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
@@ -417,17 +432,19 @@ function CardStudio({ suggestions, onSaved, flash }: StudioProps) {
 
 interface PoolProps {
   suggestions: Suggestion[];
+  categories: RejectCategory[];
   onChanged: () => void;
   flash: (text: string, ok: boolean) => void;
 }
 
-function SuggestionPool({ suggestions, onChanged, flash }: PoolProps) {
+function SuggestionPool({ suggestions, categories, onChanged, flash }: PoolProps) {
   const [filter, setFilter]     = useState<Filter>("available");
   const [query, setQuery]       = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [editingId, setEditing] = useState<number | null>(null);
   const [editText, setEditText] = useState("");
   const [rejecting, setRejecting] = useState<number[] | null>(null);
+  const [category, setCategory] = useState("");
   const [reason, setReason]     = useState("");
   const [busy, setBusy]         = useState(false);
 
@@ -511,8 +528,8 @@ function SuggestionPool({ suggestions, onChanged, flash }: PoolProps) {
           >
             <ThumbsUp className="w-3.5 h-3.5" /> Approve
           </button>
-          <button disabled={busy} onClick={() => setRejecting(ids)} className={`${miniButton} !text-red-300 hover:!bg-red-900/40`}>
-            <ThumbsDown className="w-3.5 h-3.5" /> Reject with reason
+          <button disabled={busy} onClick={() => { setRejecting(ids); setCategory(""); setReason(""); }} className={`${miniButton} !text-red-300 hover:!bg-red-900/40`}>
+            <ThumbsDown className="w-3.5 h-3.5" /> Decline
           </button>
           <button disabled={busy} onClick={() => post("exclude", { ids, excluded: true }, "Excluded.")} className={miniButton}>
             <EyeOff className="w-3.5 h-3.5" /> Exclude
@@ -544,30 +561,63 @@ function SuggestionPool({ suggestions, onChanged, flash }: PoolProps) {
         <div className="mb-3 p-3 rounded-lg bg-red-950/30 border border-red-800/40">
           <p className="text-xs text-slate-300 mb-2">
             Why {rejecting.length === 1 ? "isn't this one" : `aren't these ${rejecting.length}`} going
-            on a card? This is posted back to the submitter in a thread on their message.
+            on a card? The submitter gets this by DM, and the suggestion stops
+            counting towards their allowance.
           </p>
+
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {categories.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => setCategory(c.id)}
+                title={c.explanation || "Write your own explanation below"}
+                className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
+                  category === c.id
+                    ? "bg-red-900/50 text-red-200 border-red-600/60"
+                    : "bg-slate-800/80 text-slate-300 border-transparent hover:bg-slate-700"}`}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+
+          {category && (
+            <p className="text-[11px] text-slate-400 mb-2 italic">
+              {categories.find((c) => c.id === category)?.explanation
+                || "Nothing is sent unless you write it below."}
+            </p>
+          )}
+
           <textarea
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={2}
             maxLength={300}
-            autoFocus
-            placeholder="e.g. This one would take hours of grinding for a single square."
+            placeholder={
+              category === "other"
+                ? "Required: explain the decision in your own words."
+                : "Optional: anything to add, in your own words."
+            }
             className={`${inputClass} resize-y`}
           />
+
           <div className="flex flex-wrap gap-2 mt-2">
             <button
-              disabled={busy || reason.trim().length < 3}
+              disabled={busy || !category || (category === "other" && reason.trim().length < 3)}
               onClick={async () => {
-                await post("review", { ids: rejecting, status: "rejected", reason }, "Rejected.");
+                await post("review", { ids: rejecting, status: "rejected", category, reason }, "Declined.");
                 setRejecting(null);
+                setCategory("");
                 setReason("");
               }}
               className={`${miniButton} !text-red-300 hover:!bg-red-900/40`}
             >
-              <ThumbsDown className="w-3.5 h-3.5" /> Reject and tell them
+              <ThumbsDown className="w-3.5 h-3.5" /> Decline and tell them
             </button>
-            <button onClick={() => { setRejecting(null); setReason(""); }} className={miniButton}>
+            <button
+              onClick={() => { setRejecting(null); setCategory(""); setReason(""); }}
+              className={miniButton}
+            >
               <X className="w-3.5 h-3.5" /> Cancel
             </button>
           </div>
@@ -634,8 +684,11 @@ function SuggestionPool({ suggestions, onChanged, flash }: PoolProps) {
                     </span>
                   )}
                 </p>
-                {s.status === "rejected" && s.reject_reason && (
-                  <p className="text-[11px] text-red-300/80 mt-1 italic">“{s.reject_reason}”</p>
+                {s.status === "rejected" && (s.reject_category || s.reject_reason) && (
+                  <p className="text-[11px] text-red-300/80 mt-1 italic">
+                    {categories.find((c) => c.id === s.reject_category)?.label ?? "Declined"}
+                    {s.reject_reason ? ` — ${s.reject_reason}` : ""}
+                  </p>
                 )}
               </div>
               {editingId !== s.id && (
@@ -655,7 +708,7 @@ function SuggestionPool({ suggestions, onChanged, flash }: PoolProps) {
                       title="Reject and tell the submitter why"
                       className={`${iconButton} hover:!text-red-300`}
                       disabled={busy}
-                      onClick={() => { setRejecting([s.id]); setReason(""); }}
+                      onClick={() => { setRejecting([s.id]); setCategory(""); setReason(""); }}
                     >
                       <ThumbsDown className="w-3.5 h-3.5" />
                     </button>

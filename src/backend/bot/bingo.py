@@ -2,7 +2,8 @@
 
 Members post challenge ideas in one dedicated channel. Every message there is
 checked against the posted rules: ten suggestions per person in total, over as
-many messages as they like, nothing offensive and nothing empty. Accepted
+many messages as they like, nothing offensive and nothing empty. Numbered lists,
+bulleted lists and one-per-line all work. Accepted
 messages get their suggestions put into the pool the admin dashboard draws
 bingo cards from; ones the bot cannot read get a ❌ and an explanation by DM.
 
@@ -13,9 +14,10 @@ submissions that actually landed.
 
 Reactions track how far along a submission is:
 
-* ✅ 👁️ — the bot accepted it, an admin still has to review the suggestions
-* ✅      — every suggestion in that message was approved
-* ❌      — the bot turned the message away, or every suggestion was rejected
+* ✅ — the bot read this as a suggestion
+* 👁️ — an admin still has to review it
+* ☑️ — reviewed, and at least one suggestion from it is in the pool
+* ❌ — the bot could not read the message, or nothing in it was approved
 
 On startup the bot reads back through the channel from the rules message and
 processes anything it missed while it was down, then repairs the reactions on
@@ -65,6 +67,8 @@ RULES_SUBMISSION = (
     "• Spread them over as many messages as you like\n"
     f"• A message that would take you past {MAX_PER_PERSON} is deleted and none "
     "of it counts, so I'll DM you how many you have left\n"
+    "• Anything we turn down doesn't count towards your total, so you can always "
+    "send another\n"
     "• Suggestions must be something that can actually be completed within a "
     "Splatoon game"
 )
@@ -83,7 +87,9 @@ RULES_CONTENT = (
 )
 
 RULES_FORMAT = (
-    "```\n1. First suggestion\n2. Second suggestion\n3. Third suggestion\n```"
+    "Put each suggestion on its own line. Numbered, bulleted or plain all work:\n"
+    "```\n1. First suggestion\n2. Second suggestion\n```\n"
+    "```\n- First suggestion\n- Second suggestion\n```"
 )
 
 
@@ -102,18 +108,17 @@ def _rules_embed() -> Embed:
         "suggestion could still be used in a future Bingo card. 👀",
         inline=False,
     )
+    embed.add_field("How to format them", RULES_FORMAT, inline=False)
     embed.add_field(
-        "Please format your suggestions exactly like this",
-        RULES_FORMAT,
+        "What the reactions mean",
+        f"{notifier.ACCEPTED_EMOJI} I read this as a suggestion\n"
+        f"{notifier.REVIEW_EMOJI} waiting on a human to review it\n"
+        f"{notifier.APPROVED_EMOJI} approved and in the pool\n"
+        f"{notifier.REJECTED_EMOJI} I couldn't read it, or none of it was approved\n\n"
+        "If a suggestion is turned down I'll DM you why, and it won't count "
+        f"towards your {MAX_PER_PERSON}.",
         inline=False,
     )
-    embed.add_field(
-        "Numbering",
-        "Just number them from 1 in each message. It's the running total across "
-        f"all your messages that has to stay under {MAX_PER_PERSON}.",
-        inline=False,
-    )
-    embed.set_footer(text="The bot reacts ✅ when your submission is saved, or ❌ with a reason.")
     return embed
 
 
@@ -322,8 +327,8 @@ class BingoExt(interactions.Extension):
         known = await BingoManager.known_message_ids(BINGO_GUILD_ID)
         dmed: set[int] = set()
 
-        # history(after=...) walks forward in time, which matters: the one
-        # message per person rule has to be applied in the order people posted.
+        # history(after=...) walks forward in time, which matters: the ten per
+        # person allowance has to be spent in the order people posted.
         async for message in channel.history(limit=CATCHUP_LIMIT,
                                              after=CATCHUP_AFTER_MESSAGE_ID):
             counts["scanned"] += 1

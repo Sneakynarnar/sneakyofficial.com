@@ -318,6 +318,7 @@ CREATE TABLE IF NOT EXISTS bingo_suggestions (
   used TINYINT NOT NULL DEFAULT 0,
   used_card_id INT DEFAULT NULL,
   status VARCHAR(10) NOT NULL DEFAULT 'pending',
+  reject_category VARCHAR(32) DEFAULT NULL,
   reject_reason VARCHAR(300) DEFAULT NULL,
   reviewed_at DATETIME DEFAULT NULL,
   reviewed_by BIGINT DEFAULT NULL,
@@ -336,7 +337,6 @@ CREATE TABLE IF NOT EXISTS bingo_submission_messages (
   discord_id BIGINT NOT NULL,
   display_name VARCHAR(100) NOT NULL,
   accepted_count TINYINT NOT NULL DEFAULT 0,
-  thread_id BIGINT DEFAULT NULL,
   notified_ids VARCHAR(255) DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (message_id),
@@ -366,3 +366,6 @@ CREATE TABLE IF NOT EXISTS bingo_cards (
 -- ALTER TABLE bingo_submission_messages DROP PRIMARY KEY, ADD PRIMARY KEY (message_id);
 -- ALTER TABLE bingo_submission_messages ADD INDEX idx_member (guild_id, discord_id);
 -- ALTER TABLE bingo_submission_messages ADD COLUMN notified_ids VARCHAR(255) DEFAULT NULL;
+--
+-- Migration for installs created before decline categories:
+-- ALTER TABLE bingo_suggestions ADD COLUMN reject_category VARCHAR(32) DEFAULT NULL;

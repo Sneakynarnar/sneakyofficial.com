@@ -11,7 +11,7 @@ from ..util import overlay_settings as _ov
 from ..util import splatdle_presence as _presence
 from . import splatdle_history as _history
 from ..tournament import TournamentManager
-from ..bingo import BingoManager, notifier as bingo_notifier
+from ..bingo import BingoManager, REJECT_CATEGORIES, notifier as bingo_notifier
 from ..util.config import global_config
 import interactions
 import logging
@@ -1268,6 +1268,10 @@ class SneakyApi:
                 "suggestions": await BingoManager.list_suggestions(guild),
                 "cards": await BingoManager.list_cards(),
                 "stats": await BingoManager.get_stats(guild),
+                "reject_categories": [
+                    {"id": key, "label": value["label"], "explanation": value["explanation"]}
+                    for key, value in REJECT_CATEGORIES.items()
+                ],
             })
         except Exception:
             logger.exception("bingo_admin_get failed")
@@ -1328,8 +1332,8 @@ class SneakyApi:
     async def bingo_admin_review(self, request: Request, admin_id: int) -> web.Response:
         """Approve or reject suggestions and push the verdict back to Discord.
 
-        Approving everything on a message clears its 👁️ reaction; leaving any
-        rejected opens a thread on the message explaining why.
+        Approving everything on a message swaps its 👁️ for a ☑️; anything turned
+        down is explained to the submitter by DM.
         """
         try:
             body = await request.json()
@@ -1337,6 +1341,7 @@ class SneakyApi:
             ok, msg, message_ids = await BingoManager.set_status(
                 ids,
                 str(body.get("status", "")),
+                category=body.get("category"),
                 reason=body.get("reason"),
                 admin_id=admin_id,
             )
