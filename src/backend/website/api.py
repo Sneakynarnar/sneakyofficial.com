@@ -202,18 +202,23 @@ class SneakyApi:
             # TodaysLeaderboard is wiped at every reset, so keep a permanent row
             # for the long range stats in the admin portal.
             await _history.record_play(discord_id, guess_count)
-            # Get global average for comparison
-            await cur.execute("SELECT AVG(average_guess_count) as global_avg FROM UserStats WHERE times_played > 0")
-            global_avg_row = await cur.fetchone()
-            global_avg = float(global_avg_row[0]) if global_avg_row and global_avg_row[0] else 0.0
 
-            # Get updated user stats to return
-            await cur.execute("""
-                SELECT streak, times_played, average_guess_count, played_today
-                FROM UserStats
-                WHERE discord_id = %s
-            """, (discord_id,))
-            updated_stats = await cur.fetchone()
+            # A second connection, because the one above was handed back to the
+            # pool when its block ended. The writes are committed by now, so
+            # this reads the numbers we just wrote.
+            async with DBContextManager() as cur:
+                # Get global average for comparison
+                await cur.execute("SELECT AVG(average_guess_count) as global_avg FROM UserStats WHERE times_played > 0")
+                global_avg_row = await cur.fetchone()
+                global_avg = float(global_avg_row[0]) if global_avg_row and global_avg_row[0] else 0.0
+
+                # Get updated user stats to return
+                await cur.execute("""
+                    SELECT streak, times_played, average_guess_count, played_today
+                    FROM UserStats
+                    WHERE discord_id = %s
+                """, (discord_id,))
+                updated_stats = await cur.fetchone()
 
             if updated_stats:
                 current_streak, total_games, current_avg, _ = updated_stats
@@ -237,7 +242,8 @@ class SneakyApi:
                 })
             else:
                 return web.json_response({"status": "ok"})
-        except Exception as e:
+        except Exception:
+            logger.exception("post_stats failed for discord_id=%s", discord_id)
             return web.json_response({"error": "Database error"}, status=500)
 
     # ------------------------------------------------------------------ #
