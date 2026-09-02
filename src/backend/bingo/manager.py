@@ -105,6 +105,10 @@ _TABLES = (
          excluded TINYINT NOT NULL DEFAULT 0,
          used TINYINT NOT NULL DEFAULT 0,
          used_card_id INT DEFAULT NULL,
+         status VARCHAR(10) NOT NULL DEFAULT 'pending',
+         reject_reason VARCHAR(300) DEFAULT NULL,
+         reviewed_at DATETIME DEFAULT NULL,
+         reviewed_by BIGINT DEFAULT NULL,
          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
          UNIQUE KEY uq_message_position (message_id, position),
          INDEX idx_guild_user (guild_id, discord_id),
@@ -116,6 +120,8 @@ _TABLES = (
          message_id BIGINT NOT NULL,
          display_name VARCHAR(100) NOT NULL,
          accepted_count TINYINT NOT NULL DEFAULT 0,
+         thread_id BIGINT DEFAULT NULL,
+         notified_ids VARCHAR(255) DEFAULT NULL,
          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
          PRIMARY KEY (guild_id, discord_id)
        )""",
@@ -130,11 +136,23 @@ _TABLES = (
        )""",
 )
 
+# Columns added after the tables first shipped. CREATE TABLE IF NOT EXISTS will
+# not touch an existing table, so each one is added separately and tolerates
+# already being there.
+_COLUMNS = (
+    "ALTER TABLE bingo_suggestions ADD COLUMN status VARCHAR(10) NOT NULL DEFAULT 'pending'",
+    "ALTER TABLE bingo_suggestions ADD COLUMN reject_reason VARCHAR(300) DEFAULT NULL",
+    "ALTER TABLE bingo_suggestions ADD COLUMN reviewed_at DATETIME DEFAULT NULL",
+    "ALTER TABLE bingo_suggestions ADD COLUMN reviewed_by BIGINT DEFAULT NULL",
+    "ALTER TABLE bingo_submitters ADD COLUMN thread_id BIGINT DEFAULT NULL",
+    "ALTER TABLE bingo_submitters ADD COLUMN notified_ids VARCHAR(255) DEFAULT NULL",
+)
+
 _tables_ready = False
 
 
 async def ensure_tables() -> None:
-    """Create the bingo tables on first use.
+    """Create the bingo tables and columns on first use.
 
     schema.sql is applied by hand, so a fresh deploy would otherwise 500 on the
     first suggestion until someone remembered to run it. Creating on demand
@@ -146,6 +164,12 @@ async def ensure_tables() -> None:
     async with DBContextManager() as cur:
         for statement in _TABLES:
             await cur.execute(statement)
+        for statement in _COLUMNS:
+            try:
+                await cur.execute(statement)
+            except Exception as e:
+                if "duplicate column name" not in str(e).lower():
+                    raise
     _tables_ready = True
 
 
@@ -220,6 +244,7 @@ class BingoManager:
         query = """SELECT s.id, s.guild_id, s.discord_id, s.display_name, s.position,
                           s.suggestion, s.excluded, s.used, s.used_card_id,
                           s.message_id, s.channel_id, s.created_at,
+                          s.status, s.reject_reason, s.reviewed_at,
                           c.name AS used_card_name
                    FROM bingo_suggestions s
                    LEFT JOIN bingo_cards c ON c.id = s.used_card_id"""
@@ -238,6 +263,10 @@ class BingoManager:
             row["excluded"] = bool(row["excluded"])
             row["used"] = bool(row["used"])
             row["created_at"] = row["created_at"].isoformat() if row["created_at"] else None
+            row["reviewed_at"] = row["reviewed_at"].isoformat() if row["reviewed_at"] else None
+            # Message and Discord IDs exceed what JavaScript can hold exactly.
+            for key in ("message_id", "channel_id", "discord_id", "guild_id"):
+                row[key] = str(row[key]) if row[key] is not None else None
         return rows
 
     @staticmethod
@@ -320,6 +349,187 @@ class BingoManager:
             return cur.rowcount
 
     # ------------------------------------------------------------------ #
+    #  Review                                                             #
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    async def set_status(suggestion_ids: list[int], status: str,
+                         reason: Optional[str] = None,
+                         admin_id: Optional[int] = None) -> tuple[bool, str, list[int]]:
+        """Approve or reject suggestions, or send them back to pending.
+
+        Args:
+            suggestion_ids: Suggestions to update.
+            status: One of pending, approved or rejected.
+            reason: Why it was rejected. Required for rejections, since this is
+                what gets posted back to the submitter in a thread.
+            admin_id: Who made the call, kept for the audit trail.
+
+        Returns:
+            (ok, message, message_ids) where message_ids are the Discord
+            messages whose review state changed and therefore need re-syncing.
+        """
+        if status not in ("pending", "approved", "rejected"):
+            return False, "Unknown review status.", []
+        if not suggestion_ids:
+            return False, "Nothing selected.", []
+
+        clean_reason: Optional[str] = None
+        if status == "rejected":
+            clean_reason = " ".join((reason or "").split())[:300]
+            if len(clean_reason) < 3:
+                return False, "Rejecting a suggestion needs a reason to send back.", []
+
+        await ensure_tables()
+        placeholders = ", ".join(["%s"] * len(suggestion_ids))
+        async with DBContextManager(use_dict=True) as cur:
+            await cur.execute(
+                f"SELECT DISTINCT message_id FROM bingo_suggestions WHERE id IN ({placeholders})",
+                tuple(suggestion_ids)
+            )
+            message_ids = [int(r["message_id"]) for r in await cur.fetchall()]
+
+            if status == "pending":
+                await cur.execute(
+                    "UPDATE bingo_suggestions SET status = 'pending', reject_reason = NULL, "
+                    f"reviewed_at = NULL, reviewed_by = NULL WHERE id IN ({placeholders})",
+                    tuple(suggestion_ids)
+                )
+            else:
+                await cur.execute(
+                    "UPDATE bingo_suggestions SET status = %s, reject_reason = %s, "
+                    f"reviewed_at = NOW(), reviewed_by = %s WHERE id IN ({placeholders})",
+                    (status, clean_reason, admin_id, *suggestion_ids)
+                )
+            changed = cur.rowcount
+
+            # A suggestion that stops being rejected has nothing outstanding to
+            # explain, so forget that we told them. If it is rejected again
+            # later, the new reason gets sent rather than silently swallowed.
+            if status != "rejected":
+                dropped = {str(i) for i in suggestion_ids}
+                for mid in message_ids:
+                    await cur.execute(
+                        "SELECT notified_ids FROM bingo_submitters WHERE message_id = %s",
+                        (mid,)
+                    )
+                    row = await cur.fetchone()
+                    if not row or not row["notified_ids"]:
+                        continue
+                    kept = [x for x in row["notified_ids"].split(",") if x.strip() and x not in dropped]
+                    await cur.execute(
+                        "UPDATE bingo_submitters SET notified_ids = %s WHERE message_id = %s",
+                        (",".join(kept) or None, mid)
+                    )
+
+        verb = {"approved": "Approved", "rejected": "Rejected", "pending": "Reset"}[status]
+        return True, f"{verb} {changed} suggestion{'s' if changed != 1 else ''}.", message_ids
+
+    @staticmethod
+    async def message_review_state(message_id: int) -> Optional[dict[str, Any]]:
+        """Summarise where one submission message has got to in review.
+
+        Returns None when the message has no stored suggestions, which is the
+        case for anything the bot turned away at the door.
+        """
+        await ensure_tables()
+        async with DBContextManager(use_dict=True) as cur:
+            await cur.execute(
+                """SELECT id, position, suggestion, status, reject_reason,
+                          display_name, discord_id, channel_id, guild_id
+                   FROM bingo_suggestions WHERE message_id = %s ORDER BY position""",
+                (message_id,)
+            )
+            rows = await cur.fetchall()
+            if not rows:
+                return None
+
+            await cur.execute(
+                "SELECT thread_id, notified_ids FROM bingo_submitters WHERE message_id = %s",
+                (message_id,)
+            )
+            submitter = await cur.fetchone()
+
+        notified: set[int] = set()
+        if submitter and submitter["notified_ids"]:
+            notified = {int(x) for x in submitter["notified_ids"].split(",") if x.strip()}
+
+        return {
+            "message_id": message_id,
+            "channel_id": int(rows[0]["channel_id"]),
+            "guild_id": int(rows[0]["guild_id"]),
+            "discord_id": int(rows[0]["discord_id"]),
+            "display_name": rows[0]["display_name"],
+            "thread_id": int(submitter["thread_id"]) if submitter and submitter["thread_id"] else None,
+            "total": len(rows),
+            "pending": [r for r in rows if r["status"] == "pending"],
+            "approved": [r for r in rows if r["status"] == "approved"],
+            "rejected": [r for r in rows if r["status"] == "rejected"],
+            # Rejections the submitter has not been told about yet, so changing
+            # your mind about another suggestion later still gets explained.
+            "unreported": [r for r in rows
+                           if r["status"] == "rejected" and r["id"] not in notified],
+        }
+
+    @staticmethod
+    async def all_message_ids(guild_id: Optional[int] = None) -> list[int]:
+        """Every submission message the bot has stored suggestions for."""
+        await ensure_tables()
+        query = "SELECT DISTINCT message_id FROM bingo_suggestions"
+        params: tuple[Any, ...] = ()
+        if guild_id:
+            query += " WHERE guild_id = %s"
+            params = (guild_id,)
+        query += " ORDER BY message_id"
+        async with DBContextManager(use_dict=True) as cur:
+            await cur.execute(query, params)
+            return [int(r["message_id"]) for r in await cur.fetchall()]
+
+    @staticmethod
+    async def known_message_ids(guild_id: int) -> set[int]:
+        """Message IDs the bot has already made a decision about.
+
+        Covers both stored suggestions and the message that took each member's
+        one-message lock, so catch-up never reprocesses a message.
+        """
+        await ensure_tables()
+        async with DBContextManager(use_dict=True) as cur:
+            await cur.execute(
+                "SELECT DISTINCT message_id FROM bingo_suggestions WHERE guild_id = %s",
+                (guild_id,)
+            )
+            known = {int(r["message_id"]) for r in await cur.fetchall()}
+            await cur.execute(
+                "SELECT message_id FROM bingo_submitters WHERE guild_id = %s",
+                (guild_id,)
+            )
+            known.update(int(r["message_id"]) for r in await cur.fetchall())
+        return known
+
+    @staticmethod
+    async def record_feedback(message_id: int, thread_id: int,
+                              reported_ids: list[int]) -> None:
+        """Note the feedback thread and which rejections it has explained.
+
+        Keeping the reported IDs means only one thread is ever created and each
+        rejection is explained exactly once, however many review passes it takes.
+        """
+        await ensure_tables()
+        async with DBContextManager(use_dict=True) as cur:
+            await cur.execute(
+                "SELECT notified_ids FROM bingo_submitters WHERE message_id = %s",
+                (message_id,)
+            )
+            row = await cur.fetchone()
+            known = {x for x in (row["notified_ids"] or "").split(",") if x.strip()} if row else set()
+            known.update(str(i) for i in reported_ids)
+            await cur.execute(
+                "UPDATE bingo_submitters SET thread_id = %s, notified_ids = %s "
+                "WHERE message_id = %s",
+                (thread_id, ",".join(sorted(known))[:255], message_id)
+            )
+
+    # ------------------------------------------------------------------ #
     #  Cards                                                              #
     # ------------------------------------------------------------------ #
 
@@ -347,7 +557,7 @@ class BingoManager:
 
         needed = rows * cols - (1 if free_space else 0)
 
-        where = ["excluded = 0", "used = 0"]
+        where = ["status = 'approved'", "excluded = 0", "used = 0"]
         params: list[Any] = []
         if guild_id:
             where.append("guild_id = %s")
@@ -367,8 +577,8 @@ class BingoManager:
 
         if len(pool) < needed:
             return False, (
-                f"Not enough suggestions: a {rows}x{cols} card needs {needed} and "
-                f"only {len(pool)} are available."
+                f"Not enough approved suggestions: a {rows}x{cols} card needs "
+                f"{needed} and only {len(pool)} are available."
             ), []
 
         picked = random.sample(pool, needed)
@@ -463,7 +673,10 @@ class BingoManager:
                 f"""SELECT COUNT(*) AS total,
                            SUM(used = 1) AS used,
                            SUM(excluded = 1) AS excluded,
-                           SUM(used = 0 AND excluded = 0) AS available,
+                           SUM(status = 'pending') AS pending,
+                           SUM(status = 'approved') AS approved,
+                           SUM(status = 'rejected') AS rejected,
+                           SUM(status = 'approved' AND used = 0 AND excluded = 0) AS available,
                            COUNT(DISTINCT discord_id) AS submitters
                     FROM bingo_suggestions {where}""",
                 params
@@ -476,6 +689,9 @@ class BingoManager:
             "total": int(row.get("total") or 0),
             "used": int(row.get("used") or 0),
             "excluded": int(row.get("excluded") or 0),
+            "pending": int(row.get("pending") or 0),
+            "approved": int(row.get("approved") or 0),
+            "rejected": int(row.get("rejected") or 0),
             "available": int(row.get("available") or 0),
             "submitters": int(row.get("submitters") or 0),
             "cards": int(cards.get("cards") or 0),

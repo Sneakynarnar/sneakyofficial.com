@@ -317,6 +317,10 @@ CREATE TABLE IF NOT EXISTS bingo_suggestions (
   excluded TINYINT NOT NULL DEFAULT 0,
   used TINYINT NOT NULL DEFAULT 0,
   used_card_id INT DEFAULT NULL,
+  status VARCHAR(10) NOT NULL DEFAULT 'pending',
+  reject_reason VARCHAR(300) DEFAULT NULL,
+  reviewed_at DATETIME DEFAULT NULL,
+  reviewed_by BIGINT DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uq_message_position (message_id, position),
   INDEX idx_guild_user (guild_id, discord_id),
@@ -332,6 +336,7 @@ CREATE TABLE IF NOT EXISTS bingo_submitters (
   message_id BIGINT NOT NULL,
   display_name VARCHAR(100) NOT NULL,
   accepted_count TINYINT NOT NULL DEFAULT 0,
+  thread_id BIGINT DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (guild_id, discord_id)
 );
@@ -346,3 +351,10 @@ CREATE TABLE IF NOT EXISTS bingo_cards (
   cells JSON NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Migration for installs created before the review workflow:
+-- ALTER TABLE bingo_suggestions ADD COLUMN status VARCHAR(10) NOT NULL DEFAULT 'pending';
+-- ALTER TABLE bingo_suggestions ADD COLUMN reject_reason VARCHAR(300) DEFAULT NULL;
+-- ALTER TABLE bingo_suggestions ADD COLUMN reviewed_at DATETIME DEFAULT NULL;
+-- ALTER TABLE bingo_suggestions ADD COLUMN reviewed_by BIGINT DEFAULT NULL;
+-- ALTER TABLE bingo_submitters ADD COLUMN thread_id BIGINT DEFAULT NULL;

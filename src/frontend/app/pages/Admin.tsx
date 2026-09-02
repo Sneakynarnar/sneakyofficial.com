@@ -40,6 +40,7 @@ interface AdminTournament {
 
 interface BingoStats {
   available: number;
+  pending: number;
   total: number;
   submitters: number;
   cards: number;
@@ -377,7 +378,9 @@ function Overview({ tournament, signupCount, bingoStats, onGo }: {
           onClick={() => onGo("bingo")}
           lines={bingoStats
             ? [
-                `${bingoStats.available} suggestions available`,
+                bingoStats.pending > 0
+                  ? `${bingoStats.pending} awaiting review`
+                  : `${bingoStats.available} approved and ready`,
                 `${bingoStats.total} total from ${bingoStats.submitters} people · ${bingoStats.cards} cards made`,
               ]
             : ["No suggestions yet", "They arrive as people post in the channel"]}

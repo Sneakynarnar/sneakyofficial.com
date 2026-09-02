@@ -3,13 +3,23 @@
 Members post challenge ideas in one dedicated channel. Every message there is
 checked against the posted rules: one accepted message per person, up to three
 numbered suggestions in it, nothing offensive and nothing empty. Accepted
-messages get a ✅ and their suggestions land in the pool the admin dashboard
-draws bingo cards from; rejected ones get a ❌ and an explanation, sent by DM so
-the channel stays readable.
+messages get their suggestions put into the pool the admin dashboard draws
+bingo cards from; ones the bot turns away get a ❌ and an explanation, sent by
+DM so the channel stays readable.
+
+Reactions track how far along a submission is:
+
+* ✅ 👁️ — the bot accepted it, an admin still has to review the suggestions
+* ✅      — every suggestion in that message was approved
+* ❌      — the bot turned the message away, or every suggestion was rejected
 
 A member is only locked out once a message has been *accepted*. Somebody whose
 first attempt was misformatted can fix it and post again, which is the rule
 working as intended rather than a loophole.
+
+On startup the bot reads back through the channel from the rules message and
+processes anything it missed while it was down, then repairs the reactions on
+everything it already knows about.
 """
 import asyncio
 import logging
@@ -19,9 +29,10 @@ from interactions import (
     Embed, OptionType, Permissions, slash_command, slash_default_member_permission,
     slash_option,
 )
-from interactions.api.events import MessageCreate
+from interactions.api.events import MessageCreate, Startup
 
 from backend.bingo import BingoManager, MAX_SUGGESTIONS, parse_submission
+from backend.bingo import notifier
 from backend.util.config import global_config
 
 logger = logging.getLogger("BingoExt")
@@ -29,8 +40,12 @@ logger = logging.getLogger("BingoExt")
 BINGO_CHANNEL_ID = 1544677631440592916
 BINGO_GUILD_ID = 1019293451579293747
 
-ACCEPTED_EMOJI = "✅"
-REJECTED_EMOJI = "❌"
+REJECTED_EMOJI = notifier.REJECTED_EMOJI
+
+# Catch-up starts just after the rules message, so the rules post itself and
+# anything said before it are never treated as submissions.
+CATCHUP_AFTER_MESSAGE_ID = 1544679218305310781
+CATCHUP_LIMIT = 2000
 
 # How long a fallback in-channel reply stays up when a member's DMs are closed.
 _FALLBACK_REPLY_TTL = 30
@@ -111,17 +126,36 @@ class BingoExt(interactions.Extension):
         message = event.message
         if message.channel is None or int(message.channel.id) != BINGO_CHANNEL_ID:
             return
+        await self._process_message(message, notify=True)
 
+    def _is_submission(self, message: interactions.Message) -> bool:
+        """Whether a message in the channel should be read as a submission.
+
+        Admins run the channel, so let them post rules and answer questions
+        without every message being treated as an entry.
+        """
         author = message.author
         if author is None or author.bot:
-            return
+            return False
+        return int(author.id) not in global_config.tournament_admin_ids
 
+    async def _process_message(self, message: interactions.Message,
+                               notify: bool = True) -> str:
+        """Run one channel message through the submission rules.
+
+        Args:
+            message: The message to judge.
+            notify: Whether to DM the author about the outcome. Catch-up turns
+                this down so a backlog cannot become a wall of DMs.
+
+        Returns:
+            One of skipped, accepted, duplicate or invalid.
+        """
+        if not self._is_submission(message):
+            return "skipped"
+
+        author = message.author
         author_id = int(author.id)
-        # Admins run the channel, so let them post rules and answer questions
-        # without every message being treated as a submission.
-        if author_id in global_config.tournament_admin_ids:
-            return
-
         guild_id = int(message.guild.id) if message.guild else BINGO_GUILD_ID
 
         try:
@@ -133,13 +167,15 @@ class BingoExt(interactions.Extension):
                     "first message counts. Everything you sent in that message "
                     "is safely in the pool — there'll be more Bingo videos, so "
                     "keep your other ideas for next time!",
+                    notify=notify,
                 )
-                return
+                return "duplicate"
 
             ok, error, suggestions = parse_submission(message.content or "")
             if not ok:
-                await self._reject(message, error or "That submission couldn't be read.")
-                return
+                await self._reject(message, error or "That submission couldn't be read.",
+                                   notify=notify)
+                return "invalid"
 
             display_name = getattr(author, "display_name", None) or author.username
             saved, msg = await BingoManager.record_submission(
@@ -151,16 +187,23 @@ class BingoExt(interactions.Extension):
                 suggestions=suggestions,
             )
             if not saved:
-                await self._reject(message, msg)
-                return
+                await self._reject(message, msg, notify=notify)
+                return "duplicate"
 
-            await self._accept(message, suggestions)
+            await self._accept(message, suggestions, notify=notify)
+            return "accepted"
         except Exception:
             logger.exception("Failed to process bingo submission from %s", author_id)
+            return "skipped"
 
-    async def _accept(self, message: interactions.Message, suggestions: list[str]) -> None:
+    async def _accept(self, message: interactions.Message, suggestions: list[str],
+                      notify: bool = True) -> None:
         """React to and confirm an accepted submission."""
-        await self._react(message, ACCEPTED_EMOJI)
+        # The notifier owns the reactions, so an accepted message picks up the
+        # ✅ and the 👁️ that says an admin still has to look at it.
+        await notifier.sync_message(self.bot, int(message.id), BINGO_CHANNEL_ID)
+        if not notify:
+            return
         listed = "\n".join(f"{i}. {s}" for i, s in enumerate(suggestions, start=1))
         count = len(suggestions)
         await self._notify(
@@ -168,13 +211,16 @@ class BingoExt(interactions.Extension):
             f"✅ Thanks! Your {count} Splatoon Bingo suggestion"
             f"{'s are' if count != 1 else ' is'} in:\n\n{listed}\n\n"
             "That was your one submission, so anything you post after this "
-            "won't be counted. Good luck — your idea might turn up on a card!",
+            "won't be counted. They'll be reviewed before they go on a card, and "
+            "I'll let you know here if any of them don't make it.",
         )
 
-    async def _reject(self, message: interactions.Message, reason: str) -> None:
-        """React to and explain a rejected submission."""
+    async def _reject(self, message: interactions.Message, reason: str,
+                      notify: bool = True) -> None:
+        """React to and explain a submission the bot turned away."""
         await self._react(message, REJECTED_EMOJI)
-        await self._notify(message, f"❌ {reason}")
+        if notify:
+            await self._notify(message, f"❌ {reason}")
 
     async def _react(self, message: interactions.Message, emoji: str) -> None:
         """Add a verdict reaction, tolerating missing permissions."""
@@ -197,6 +243,67 @@ class BingoExt(interactions.Extension):
             await reply.delete()
         except Exception:
             logger.warning("Could not notify %s about their submission", message.author.id)
+
+    # ------------------------------------------------------------------ #
+    #  Startup catch-up                                                   #
+    # ------------------------------------------------------------------ #
+
+    @interactions.listen(Startup)
+    async def on_startup(self) -> None:
+        """Pick up anything posted while the bot was down."""
+        try:
+            summary = await self.catch_up()
+            logger.info("Bingo catch-up: %s", summary)
+        except Exception:
+            logger.exception("Bingo catch-up failed")
+
+    async def catch_up(self, notify: bool = True) -> dict[str, int]:
+        """Read the channel forward from the rules message and process the gap.
+
+        Messages the bot has already ruled on are skipped, so this is safe to
+        run as often as you like. Everything it does know about is re-synced
+        afterwards, which repairs reactions that were cleared or missed.
+
+        Args:
+            notify: Whether to DM authors about newly processed messages. Even
+                when on, each person is only DMed once per run, so a backlog
+                cannot turn into a wall of DMs.
+
+        Returns:
+            Counts of what happened, for logging and the slash command.
+        """
+        counts = {"scanned": 0, "accepted": 0, "duplicate": 0, "invalid": 0,
+                  "skipped": 0, "resynced": 0}
+
+        channel = await self.bot.fetch_channel(BINGO_CHANNEL_ID)
+        if channel is None:
+            logger.warning("Bingo channel %s is not reachable", BINGO_CHANNEL_ID)
+            return counts
+
+        known = await BingoManager.known_message_ids(BINGO_GUILD_ID)
+        dmed: set[int] = set()
+
+        # history(after=...) walks forward in time, which matters: the one
+        # message per person rule has to be applied in the order people posted.
+        async for message in channel.history(limit=CATCHUP_LIMIT,
+                                             after=CATCHUP_AFTER_MESSAGE_ID):
+            counts["scanned"] += 1
+            if int(message.id) in known or not self._is_submission(message):
+                continue
+
+            author_id = int(message.author.id)
+            should_dm = notify and author_id not in dmed
+            outcome = await self._process_message(message, notify=should_dm)
+            counts[outcome] = counts.get(outcome, 0) + 1
+            if should_dm and outcome != "skipped":
+                dmed.add(author_id)
+
+        # Reactions drift when the bot is offline or a member clears them, so
+        # bring every stored submission back to what its review state says.
+        counts["resynced"] = await notifier.sync_messages(
+            self.bot, await BingoManager.all_message_ids(BINGO_GUILD_ID)
+        )
+        return counts
 
     # ------------------------------------------------------------------ #
     #  Admin commands                                                     #
@@ -224,13 +331,35 @@ class BingoExt(interactions.Extension):
             title="🎲 Splatoon Bingo pool",
             color=global_config.theme_colour,
         )
-        embed.add_field("Available", str(stats["available"]), inline=True)
+        embed.add_field("Awaiting review", str(stats["pending"]), inline=True)
+        embed.add_field("Approved", str(stats["approved"]), inline=True)
+        embed.add_field("Rejected", str(stats["rejected"]), inline=True)
+        embed.add_field("Ready for a card", str(stats["available"]), inline=True)
         embed.add_field("Used on cards", str(stats["used"]), inline=True)
         embed.add_field("Excluded", str(stats["excluded"]), inline=True)
         embed.add_field("Total suggestions", str(stats["total"]), inline=True)
         embed.add_field("Submitters", str(stats["submitters"]), inline=True)
         embed.add_field("Cards made", str(stats["cards"]), inline=True)
         embed.set_footer(text="Manage the pool and build cards at /admin")
+        await ctx.send(embed=embed, ephemeral=True)
+
+    @bingo.subcommand(sub_cmd_name="catchup", sub_cmd_description="Process any messages the bot missed")
+    @slash_default_member_permission(Permissions.MANAGE_GUILD)
+    @slash_option(
+        name="notify",
+        description="DM authors about newly processed messages (default: no)",
+        required=False,
+        opt_type=OptionType.BOOLEAN,
+    )
+    async def bingo_catchup(self, ctx: interactions.SlashContext, notify: bool = False) -> None:
+        await ctx.defer(ephemeral=True)
+        counts = await self.catch_up(notify=notify)
+        embed = Embed(title="🎲 Bingo catch-up", color=global_config.theme_colour)
+        embed.add_field("Scanned", str(counts["scanned"]), inline=True)
+        embed.add_field("Newly accepted", str(counts["accepted"]), inline=True)
+        embed.add_field("Already submitted", str(counts["duplicate"]), inline=True)
+        embed.add_field("Badly formatted", str(counts["invalid"]), inline=True)
+        embed.add_field("Reactions resynced", str(counts["resynced"]), inline=True)
         await ctx.send(embed=embed, ephemeral=True)
 
     @bingo.subcommand(sub_cmd_name="reset", sub_cmd_description="Let a member submit again")

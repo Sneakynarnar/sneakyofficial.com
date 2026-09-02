@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import {
-  Check, Dices, Download, EyeOff, Grid3x3, Loader2, Pencil, Save, Search,
-  Trash2, Undo2, X,
+  Check, Dices, Download, EyeOff, Grid3x3, Loader2, Pencil, RefreshCw, Save,
+  Search, ThumbsDown, ThumbsUp, Trash2, Undo2, X,
 } from "lucide-react";
 import {
   CARD_THEMES, cardToPngBlob, drawBingoCard,
@@ -12,12 +12,19 @@ import {
 const API_URL = import.meta.env.VITE_API_URL ?? "";
 const GUILD_ID = import.meta.env.VITE_GUILD_ID ?? "";
 
+type Status = "pending" | "approved" | "rejected";
+
 interface Suggestion {
   id: number;
-  discord_id: number;
+  /** Discord snowflakes arrive as strings; they overflow a JS number. */
+  discord_id: string;
+  message_id: string;
   display_name: string;
   position: number;
   suggestion: string;
+  status: Status;
+  reject_reason: string | null;
+  reviewed_at: string | null;
   excluded: boolean;
   used: boolean;
   used_card_id: number | null;
@@ -39,19 +46,27 @@ interface Stats {
   total: number;
   used: number;
   excluded: number;
+  pending: number;
+  approved: number;
+  rejected: number;
   available: number;
   submitters: number;
   cards: number;
 }
 
-type Filter = "available" | "excluded" | "used" | "all";
+type Filter = "pending" | "available" | "rejected" | "excluded" | "used" | "all";
 
 const FILTERS: { id: Filter; label: string }[] = [
-  { id: "available", label: "Available" },
+  { id: "pending",   label: "To review" },
+  { id: "available", label: "Ready"     },
+  { id: "rejected",  label: "Rejected"  },
   { id: "excluded",  label: "Excluded"  },
   { id: "used",      label: "Used"      },
   { id: "all",       label: "All"       },
 ];
+
+/** A suggestion is drawable only once approved and not spent or excluded. */
+const isReady = (s: Suggestion) => s.status === "approved" && !s.excluded && !s.used;
 
 const SIZES = [2, 3, 4, 5, 6, 7, 8];
 
@@ -105,6 +120,8 @@ export default function BingoSection() {
 
       {stats && <StatsRow stats={stats} />}
 
+      <ResyncBar onDone={load} flash={flash} />
+
       <CardStudio suggestions={suggestions} onSaved={load} flash={flash} />
 
       <SuggestionPool suggestions={suggestions} onChanged={load} flash={flash} />
@@ -120,7 +137,9 @@ export default function BingoSection() {
 
 function StatsRow({ stats }: { stats: Stats }) {
   const tiles: { label: string; value: number; tone: string }[] = [
-    { label: "Available",   value: stats.available,  tone: "text-emerald-300" },
+    { label: "To review",   value: stats.pending,    tone: "text-violet-300"  },
+    { label: "Ready",       value: stats.available,  tone: "text-emerald-300" },
+    { label: "Rejected",    value: stats.rejected,   tone: "text-red-300"     },
     { label: "Used",        value: stats.used,       tone: "text-sky-300"     },
     { label: "Excluded",    value: stats.excluded,   tone: "text-amber-300"   },
     { label: "Total",       value: stats.total,      tone: "text-slate-200"   },
@@ -128,13 +147,47 @@ function StatsRow({ stats }: { stats: Stats }) {
     { label: "Cards made",  value: stats.cards,      tone: "text-slate-200"   },
   ];
   return (
-    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+    <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
       {tiles.map((t) => (
         <div key={t.label} className="rounded-lg border border-slate-700/50 bg-slate-900/40 px-3 py-2">
           <div className={`text-xl font-bold ${t.tone}`}>{t.value}</div>
           <div className="text-[11px] uppercase tracking-wide text-slate-500">{t.label}</div>
         </div>
       ))}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Discord catch-up                                                   */
+/* ------------------------------------------------------------------ */
+
+function ResyncBar({ onDone, flash }: { onDone: () => void; flash: (t: string, ok: boolean) => void }) {
+  const [busy, setBusy] = useState(false);
+
+  const resync = async () => {
+    setBusy(true);
+    try {
+      const { data } = await axios.post(`${API_URL}/api/bingo/admin/resync`, {}, { withCredentials: true });
+      flash(data.message ?? "Resynced.", data.ok !== false);
+      if (data.ok !== false) onDone();
+    } catch {
+      flash("Couldn't reach the bot to resync.", false);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 px-3 py-2 rounded-lg bg-slate-900/40 border border-slate-700/40">
+      <p className="text-xs text-slate-400 flex-1 min-w-[220px]">
+        The bot catches up automatically on startup. Run this to pull in anything posted
+        since and repair the ✅ / 👁️ reactions on every submission.
+      </p>
+      <button onClick={resync} disabled={busy} className={miniButton}>
+        {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+        Catch up now
+      </button>
     </div>
   );
 }
@@ -166,7 +219,7 @@ function CardStudio({ suggestions, onSaved, flash }: StudioProps) {
 
   const theme = CARD_THEMES.find((t) => t.id === themeId) ?? CARD_THEMES[0];
   const oddDimensions = rows % 2 === 1 && cols % 2 === 1;
-  const available = suggestions.filter((s) => !s.excluded && !s.used).length;
+  const available = suggestions.filter(isReady).length;
   const needed = rows * cols - (freeSpace && oddDimensions ? 1 : 0);
 
   // A free space needs a middle square, so an even dimension rules it out.
@@ -324,7 +377,8 @@ function CardStudio({ suggestions, onSaved, flash }: StudioProps) {
             available >= needed
               ? "bg-slate-900/40 text-slate-400 border-slate-700/50"
               : "bg-amber-900/30 text-amber-300 border-amber-700/40"}`}>
-            This card needs <strong>{needed}</strong> squares and <strong>{available}</strong> are available.
+            This card needs <strong>{needed}</strong> squares and <strong>{available}</strong> approved
+            suggestion{available === 1 ? " is" : "s are"} ready. Only approved squares are drawn.
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -373,12 +427,16 @@ function SuggestionPool({ suggestions, onChanged, flash }: PoolProps) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [editingId, setEditing] = useState<number | null>(null);
   const [editText, setEditText] = useState("");
+  const [rejecting, setRejecting] = useState<number[] | null>(null);
+  const [reason, setReason]     = useState("");
   const [busy, setBusy]         = useState(false);
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return suggestions.filter((s) => {
-      if (filter === "available" && (s.excluded || s.used)) return false;
+      if (filter === "pending" && s.status !== "pending") return false;
+      if (filter === "available" && !isReady(s)) return false;
+      if (filter === "rejected" && s.status !== "rejected") return false;
       if (filter === "excluded" && !s.excluded) return false;
       if (filter === "used" && !s.used) return false;
       if (!needle) return true;
@@ -446,6 +504,16 @@ function SuggestionPool({ suggestions, onChanged, flash }: PoolProps) {
       {selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-2 mb-3 p-2 rounded-lg bg-slate-800/60 border border-slate-700/50">
           <span className="text-xs text-slate-400 px-1">{selected.size} selected</span>
+          <button
+            disabled={busy}
+            onClick={() => post("review", { ids, status: "approved" }, "Approved.")}
+            className={`${miniButton} !text-emerald-300 hover:!bg-emerald-900/40`}
+          >
+            <ThumbsUp className="w-3.5 h-3.5" /> Approve
+          </button>
+          <button disabled={busy} onClick={() => setRejecting(ids)} className={`${miniButton} !text-red-300 hover:!bg-red-900/40`}>
+            <ThumbsDown className="w-3.5 h-3.5" /> Reject with reason
+          </button>
           <button disabled={busy} onClick={() => post("exclude", { ids, excluded: true }, "Excluded.")} className={miniButton}>
             <EyeOff className="w-3.5 h-3.5" /> Exclude
           </button>
@@ -469,6 +537,40 @@ function SuggestionPool({ suggestions, onChanged, flash }: PoolProps) {
           <button onClick={() => setSelected(new Set())} className={miniButton}>
             <X className="w-3.5 h-3.5" /> Clear
           </button>
+        </div>
+      )}
+
+      {rejecting && (
+        <div className="mb-3 p-3 rounded-lg bg-red-950/30 border border-red-800/40">
+          <p className="text-xs text-slate-300 mb-2">
+            Why {rejecting.length === 1 ? "isn't this one" : `aren't these ${rejecting.length}`} going
+            on a card? This is posted back to the submitter in a thread on their message.
+          </p>
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={2}
+            maxLength={300}
+            autoFocus
+            placeholder="e.g. This one would take hours of grinding for a single square."
+            className={`${inputClass} resize-y`}
+          />
+          <div className="flex flex-wrap gap-2 mt-2">
+            <button
+              disabled={busy || reason.trim().length < 3}
+              onClick={async () => {
+                await post("review", { ids: rejecting, status: "rejected", reason }, "Rejected.");
+                setRejecting(null);
+                setReason("");
+              }}
+              className={`${miniButton} !text-red-300 hover:!bg-red-900/40`}
+            >
+              <ThumbsDown className="w-3.5 h-3.5" /> Reject and tell them
+            </button>
+            <button onClick={() => { setRejecting(null); setReason(""); }} className={miniButton}>
+              <X className="w-3.5 h-3.5" /> Cancel
+            </button>
+          </div>
         </div>
       )}
 
@@ -524,6 +626,7 @@ function SuggestionPool({ suggestions, onChanged, flash }: PoolProps) {
                 )}
                 <p className="text-[11px] text-slate-500 mt-0.5 flex flex-wrap items-center gap-x-2">
                   <span>{s.display_name}</span>
+                  <StatusBadge status={s.status} />
                   {s.excluded && <span className="text-amber-400">excluded</span>}
                   {s.used && (
                     <span className="text-sky-400">
@@ -531,9 +634,32 @@ function SuggestionPool({ suggestions, onChanged, flash }: PoolProps) {
                     </span>
                   )}
                 </p>
+                {s.status === "rejected" && s.reject_reason && (
+                  <p className="text-[11px] text-red-300/80 mt-1 italic">“{s.reject_reason}”</p>
+                )}
               </div>
               {editingId !== s.id && (
                 <div className="flex items-center gap-1 shrink-0">
+                  {s.status !== "approved" && (
+                    <button
+                      title="Approve for the card pool"
+                      className={`${iconButton} hover:!text-emerald-300`}
+                      disabled={busy}
+                      onClick={() => post("review", { ids: [s.id], status: "approved" }, "Approved.")}
+                    >
+                      <ThumbsUp className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {s.status !== "rejected" && (
+                    <button
+                      title="Reject and tell the submitter why"
+                      className={`${iconButton} hover:!text-red-300`}
+                      disabled={busy}
+                      onClick={() => { setRejecting([s.id]); setReason(""); }}
+                    >
+                      <ThumbsDown className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                   <button
                     title="Edit wording"
                     className={iconButton}
@@ -666,6 +792,16 @@ const miniButton =
 const iconButton =
   "p-1.5 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-700/60 " +
   "disabled:opacity-40 transition-colors";
+
+function StatusBadge({ status }: { status: Status }) {
+  const tone = status === "approved"
+    ? "text-emerald-400"
+    : status === "rejected"
+    ? "text-red-400"
+    : "text-violet-400";
+  const label = status === "pending" ? "awaiting review" : status;
+  return <span className={tone}>{label}</span>;
+}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (

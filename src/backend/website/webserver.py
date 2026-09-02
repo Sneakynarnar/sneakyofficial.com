@@ -253,6 +253,10 @@ class WebServer:
             "/api/bingo/admin/card/delete", self.sneaky_api.bingo_admin_delete_card)
         self.app.router.add_post(
             "/api/bingo/admin/reset-submitter", self.sneaky_api.bingo_admin_reset_submitter)
+        self.app.router.add_post(
+            "/api/bingo/admin/review", self.sneaky_api.bingo_admin_review)
+        self.app.router.add_post(
+            "/api/bingo/admin/resync", self.sneaky_api.bingo_admin_resync)
 
         logger.debug("Static directory: %s", self.static_dir)
         assets_dir = os.path.join(self.static_dir, "assets")

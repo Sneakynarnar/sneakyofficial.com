@@ -11,7 +11,7 @@ from ..util import overlay_settings as _ov
 from ..util import splatdle_presence as _presence
 from . import splatdle_history as _history
 from ..tournament import TournamentManager
-from ..bingo import BingoManager
+from ..bingo import BingoManager, notifier as bingo_notifier
 from ..util.config import global_config
 import interactions
 import logging
@@ -89,6 +89,9 @@ class SneakyApi:
             bot: The Discord bot client instance.
         """
         self.splatdle: Splatdle = Splatdle(bot)
+        # Bingo review decisions are pushed straight back out to Discord, and
+        # the bot shares this process with the webserver.
+        self.bot: interactions.Client = bot
         self.dc_token_handler: DiscordOauthHandler = DiscordOauthHandler()
 
     def json_response(self, code: str, message: str, status: int = 200) -> web.Response:
@@ -1319,6 +1322,54 @@ class SneakyApi:
             return web.json_response({"ok": True, "deleted": deleted})
         except Exception:
             logger.exception("bingo_admin_delete failed")
+            return web.json_response({"error": "Server error"}, status=500)
+
+    @verify_tournament_admin
+    async def bingo_admin_review(self, request: Request, admin_id: int) -> web.Response:
+        """Approve or reject suggestions and push the verdict back to Discord.
+
+        Approving everything on a message clears its 👁️ reaction; leaving any
+        rejected opens a thread on the message explaining why.
+        """
+        try:
+            body = await request.json()
+            ids = [int(i) for i in body.get("ids", [])]
+            ok, msg, message_ids = await BingoManager.set_status(
+                ids,
+                str(body.get("status", "")),
+                reason=body.get("reason"),
+                admin_id=admin_id,
+            )
+            if not ok:
+                return web.json_response({"ok": False, "message": msg}, status=400)
+
+            synced = await bingo_notifier.sync_messages(self.bot, message_ids)
+            return web.json_response({"ok": True, "message": msg, "synced": synced})
+        except Exception:
+            logger.exception("bingo_admin_review failed")
+            return web.json_response({"error": "Server error"}, status=500)
+
+    @verify_tournament_admin
+    async def bingo_admin_resync(self, request: Request, admin_id: int) -> web.Response:
+        """Re-run the channel catch-up and repair reactions on every submission."""
+        try:
+            # Registered under the class name, with the module name as a fallback.
+            extension = self.bot.get_ext("BingoExt") or self.bot.get_ext("backend.bot.bingo")
+            if extension is None:
+                return web.json_response(
+                    {"ok": False, "message": "The bingo bot extension isn't loaded."}, status=503
+                )
+            counts = await extension.catch_up(notify=False)
+            return web.json_response({
+                "ok": True,
+                "counts": counts,
+                "message": (
+                    f"Scanned {counts['scanned']} messages, accepted "
+                    f"{counts['accepted']} new one(s), resynced {counts['resynced']}."
+                ),
+            })
+        except Exception:
+            logger.exception("bingo_admin_resync failed")
             return web.json_response({"error": "Server error"}, status=500)
 
     @verify_tournament_admin
