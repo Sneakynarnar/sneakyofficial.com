@@ -4,6 +4,7 @@ from aiohttp import web
 from typing import Any, Optional, Dict
 from backend.util.database_context_manager import DBContextManager
 from . import OauthBase
+from .oauth_base import cookie_domain_for, redirect_uri_for
 from backend.util.config import global_config
 
 logger = logging.getLogger("webserver")
@@ -61,7 +62,7 @@ class DiscordOauthHandler(OauthBase):
                     'client_secret': self._client_secret,
                     'code': code,
                     'grant_type': 'authorization_code',
-                    'redirect_uri': self._redirect_uri,
+                    'redirect_uri': redirect_uri_for(request),
                 }
             ) as resp:
                 if resp.status != 200:
@@ -99,7 +100,7 @@ class DiscordOauthHandler(OauthBase):
                             (int(user_id), access_token,
                              refresh_token, int(expires_at))
                         )
-                    cookie_domain = ".sneakyofficial.com" if global_config.secured else None
+                    cookie_domain = cookie_domain_for(request)
                     response = web.HTTPFound("/authorised")
                     response.set_cookie("discord_user_id", str(
                         user_id), httponly=True, secure=global_config.secured, samesite="Lax", max_age=86400 * 30, domain=cookie_domain)
@@ -160,7 +161,7 @@ class DiscordOauthHandler(OauthBase):
         
         if not user_data:
             logger.debug("Invalid access token, clearing Discord cookies")
-            cookie_domain = ".sneakyofficial.com" if global_config.secured else None
+            cookie_domain = cookie_domain_for(request)
             response = web.json_response({"logged_in": False}, status=401)
             response.del_cookie("discord_access_token", domain=cookie_domain)
             response.del_cookie("discord_refresh_token", domain=cookie_domain)

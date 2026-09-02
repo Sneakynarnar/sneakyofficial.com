@@ -576,7 +576,7 @@ class SplatdleExt(interactions.Extension):
                 description=(
                     f"Don't forget to play today's Splatdle to keep your streak alive!\n\n"
                     f"{streak_text}\n\n"
-                    f"🔗 Play now at: https://sneakyofficial.com/splatdle"
+                    f"🔗 Play now at: {global_config.splatdle_url}"
                 ),
                 color=global_config.theme_colour
             )

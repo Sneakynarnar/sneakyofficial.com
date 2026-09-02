@@ -25,11 +25,11 @@ export default function AuthCallback() {
         console.log(data);
         if (data.logged_in) {
           setStatus("success");
-          setMessage("Authentication successful! Redirecting to Splatdle...");
+          setMessage("Authentication successful! Redirecting...");
 
           setTimeout(() => {
-            navigate("/splatdle");
-          }, 5000);
+            navigate("/");
+          }, 3000);
         } else {
           setStatus("error");
           setMessage("Authentication failed. Please try again.");
@@ -86,16 +86,16 @@ export default function AuthCallback() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100 flex items-center justify-center p-4">
       <Helmet>
-        <title>Authentication | Splatdle - Logging You In</title>
-        <meta name="description" content="Authenticating your Discord login for Splatdle. Please wait while we verify your credentials." />
-        <meta property="og:title" content="Authentication | Splatdle" />
-        <meta property="og:description" content="Authenticating your Discord login for Splatdle." />
+        <title>Authentication | sneakyofficial.com</title>
+        <meta name="description" content="Authenticating your Discord login. Please wait while we verify your credentials." />
+        <meta property="og:title" content="Authentication | sneakyofficial.com" />
+        <meta property="og:description" content="Authenticating your Discord login." />
         <meta property="og:image" content="/image.png" />
         <meta property="og:url" content="https://sneakyofficial.com/authorised" />
         <meta property="og:type" content="website" />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="Authentication | Splatdle" />
-        <meta name="twitter:description" content="Authenticating your Discord login for Splatdle." />
+        <meta name="twitter:title" content="Authentication | sneakyofficial.com" />
+        <meta name="twitter:description" content="Authenticating your Discord login." />
         <meta name="twitter:image" content="/image.png" />
       </Helmet>
       <div className="max-w-md w-full">
@@ -108,7 +108,7 @@ export default function AuthCallback() {
             <div className="mx-auto w-16 h-16 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full flex items-center justify-center mb-4">
               <span className="text-white font-bold text-xl">S</span>
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Splatdle</h1>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">sneakyofficial.com</h1>
             <p className="text-gray-500">Authentication in progress</p>
           </div>
 
@@ -143,7 +143,7 @@ export default function AuthCallback() {
 
           {status === "success" && (
             <div className="mt-6">
-              <p className="text-sm text-gray-500">Taking you to Splatdle...</p>
+              <p className="text-sm text-gray-500">Taking you back...</p>
             </div>
           )}
         </div>

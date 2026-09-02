@@ -9,6 +9,52 @@ from backend.util.config import global_config
 logger = logging.getLogger("webserver")
 
 
+def _request_host(request: web.Request) -> str:
+    """The hostname the browser asked for, without any port."""
+    return (request.host or "").split(":")[0].lower()
+
+
+def _site_for(request: web.Request) -> Optional[str]:
+    """Match a request against the sites allowed to run the OAuth flow.
+
+    Splatdle has its own domain but shares this backend, so a login can start
+    on either site. Returns the registrable host (www stripped) or None when the
+    request came from somewhere we don't hand cookies to.
+    """
+    host = _request_host(request)
+    for allowed in global_config.oauth_hosts:
+        base = allowed[4:] if allowed.startswith("www.") else allowed
+        if host == base or host.endswith(f".{base}"):
+            return base
+    return None
+
+
+def cookie_domain_for(request: web.Request) -> Optional[str]:
+    """Domain to scope session cookies to, so they stay first-party.
+
+    Cookies set on splatdle.ink must belong to splatdle.ink: scoping them to
+    sneakyofficial.com would make them third-party there, and browsers that
+    block those would drop the session silently.
+    """
+    if not global_config.secured:
+        return None
+    site = _site_for(request)
+    return f".{site}" if site else None
+
+
+def redirect_uri_for(request: web.Request) -> str:
+    """The OAuth redirect URI for the site this request came from.
+
+    Every host listed here must also be registered in the Discord developer
+    portal, or Discord rejects the login.
+    """
+    site = _site_for(request)
+    if not site:
+        return global_config.redirect_uri
+    scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
+    return f"{scheme}://{_request_host(request)}/api/auth/callback"
+
+
 class OauthBase:
     """Base class for OAuth2 authentication handlers.
 
@@ -39,6 +85,7 @@ class OauthBase:
             client_dict: Dictionary containing client credentials and redirect URI.
         """
         self._base_url = base_url
+        self._auth_endpoint = auth_url
         self._token_url = token_url
         self._platform_name = platform
         self._scopes = scopes
@@ -48,14 +95,24 @@ class OauthBase:
         self.session = None
         logger.debug("Setting up Oauth for %s, Redirect URL: %s",
                      self._platform_name, self._redirect_uri)
+
+    def build_auth_url(self, request: web.Request) -> str:
+        """Authorisation URL that sends the user back to the site they started on.
+
+        Args:
+            request: The request that began the login.
+
+        Returns:
+            The provider's authorise URL with a matching redirect URI.
+        """
         params = {
             'client_id': self._client_id,
-            'redirect_uri': self._redirect_uri,
+            'redirect_uri': redirect_uri_for(request),
             'response_type': 'code',
             'scope': self._scopes,
             'state': secrets.token_urlsafe(32),
         }
-        self._auth_url = f"{auth_url}?{urlencode(params)}"
+        return f"{self._auth_endpoint}?{urlencode(params)}"
 
     async def init(self) -> None:
         """Initialize the HTTP client session.
@@ -105,7 +162,7 @@ class OauthBase:
                     )
                 raise web.HTTPFound("/")
 
-        raise web.HTTPFound(self._auth_url)
+        raise web.HTTPFound(self.build_auth_url(request))
 
     @staticmethod
     def get_request_url(request: web.Request) -> str:
@@ -283,7 +340,7 @@ class OauthBase:
 
         response = web.json_response({"success": True})
 
-        cookie_domain = ".sneakyofficial.com" if global_config.secured else None
+        cookie_domain = cookie_domain_for(request)
         response.set_cookie(
             f"{self._platform_name}_access_token",
             new_access_token,
@@ -326,10 +383,13 @@ class OauthBase:
         """
         response = web.json_response({"message": "Logged out successfully"})
 
-        # Remove cookies by setting them with an empty value and max_age=0
-        response.del_cookie(f"{self._platform_name}_access_token")
-        response.del_cookie(f"{self._platform_name}_refresh_token")
-        response.del_cookie(f"{self._platform_name}_user_id")
+        # Remove cookies by setting them with an empty value and max_age=0.
+        # The domain has to match the one they were set with or the browser
+        # keeps them and the player stays logged in.
+        cookie_domain = cookie_domain_for(request)
+        response.del_cookie(f"{self._platform_name}_access_token", domain=cookie_domain)
+        response.del_cookie(f"{self._platform_name}_refresh_token", domain=cookie_domain)
+        response.del_cookie(f"{self._platform_name}_user_id", domain=cookie_domain)
         return response
     # async def logout_all_platforms(self, request):
     #     response = web.json_response({"message": "Logged out successfully"})

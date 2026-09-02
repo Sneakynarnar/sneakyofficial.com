@@ -105,7 +105,7 @@ class DevTools(interactions.Extension):
         Example usage:
         /dev
         """
-        await ctx.send("https://sneakyofficial.com/splatdle")
+        await ctx.send(global_config.splatdle_url)
 
     @slash_command(
         name="splatdle-link",
@@ -125,7 +125,7 @@ class DevTools(interactions.Extension):
         Example usage:
         /splatdle-link
         """
-        await ctx.send("https://sneakyofficial.com/splatdle")
+        await ctx.send(global_config.splatdle_url)
 
     @slash_command(
         name="version",

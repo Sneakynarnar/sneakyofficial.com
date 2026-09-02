@@ -58,6 +58,8 @@ class Config:
         self.tournament_guild_id: Optional[int] = None
         self.tournament_results_channel: Optional[int] = None
         self.website_url: str = "https://sneakyofficial.com"
+        self.splatdle_url: str = "https://splatdle.ink"
+        self.oauth_hosts: list[str] = []
         self.discord_invite: str = "https://discord.gg/Y6aMwgMUsC"
         self.tournament_admin_ids: list[int] = []
         self.assign_values()
@@ -90,6 +92,16 @@ class Config:
         results_channel = getenv("TOURNAMENT_RESULTS_CHANNEL")
         self.tournament_results_channel = int(results_channel) if results_channel else None
         self.website_url = getenv("WEBSITE_URL", "https://sneakyofficial.com")
+        self.splatdle_url = getenv("SPLATDLE_URL", "https://splatdle.ink")
+        # Splatdle lives on its own domain but shares this backend, so the OAuth
+        # flow has to be able to start and finish on either site. Each host here
+        # gets its own redirect URI and its own cookie domain; anything else
+        # falls back to DISCORD_REDIRECT_URI.
+        oauth_hosts_raw = getenv(
+            "OAUTH_HOSTS",
+            "sneakyofficial.com,www.sneakyofficial.com,splatdle.ink,www.splatdle.ink",
+        )
+        self.oauth_hosts = [h.strip().lower() for h in oauth_hosts_raw.split(",") if h.strip()]
         self.discord_invite = getenv("DISCORD_INVITE", "https://discord.gg/Y6aMwgMUsC")
         admin_ids_raw = getenv("TOURNAMENT_ADMIN_IDS", "339866237922181121")
         self.tournament_admin_ids = [int(x.strip()) for x in admin_ids_raw.split(",") if x.strip()]

@@ -96,7 +96,7 @@ class Splatdle:
                     description=f"The previous weapon was {weapon_name}"
                 )
                 embed.color = global_config.theme_colour
-                embed.set_image(urljoin("https://sneakyofficial.com/images/", quote(old_weapon["image"])))
+                embed.set_image(urljoin(f"{global_config.splatdle_url}/images/", quote(old_weapon["image"])))
             else:
                 embed = interactions.Embed(
                     title="Splatdle weapon reset!",

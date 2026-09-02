@@ -412,7 +412,7 @@ function Overview({ tournament, signupCount, bingoStats, onGo }: {
           <QuickLink to="/leaderboard">Leaderboard</QuickLink>
           <QuickLink to="/players">Players</QuickLink>
           <QuickLink to="/overlay">Overlay index</QuickLink>
-          <QuickLink to="/splatdle">Splatdle</QuickLink>
+          <QuickLink to="https://splatdle.ink" external>Splatdle</QuickLink>
         </div>
       </div>
     </div>
@@ -440,12 +440,16 @@ function OverviewCard({ icon: Icon, title, lines, onClick }: {
   );
 }
 
-function QuickLink({ to, children }: { to: string; children: React.ReactNode }) {
-  return (
-    <Link
-      to={to}
-      className="px-2.5 py-1 rounded text-xs font-medium text-slate-300 bg-slate-800/80 hover:bg-slate-700 transition-colors"
-    >
+function QuickLink({ to, external, children }: { to: string; external?: boolean; children: React.ReactNode }) {
+  const className =
+    "px-2.5 py-1 rounded text-xs font-medium text-slate-300 bg-slate-800/80 hover:bg-slate-700 transition-colors";
+  // Splatdle sits on its own domain, so that link leaves the app.
+  return external ? (
+    <a href={to} target="_blank" rel="noopener noreferrer" className={className}>
+      {children}
+    </a>
+  ) : (
+    <Link to={to} className={className}>
       {children}
     </Link>
   );

@@ -107,6 +107,17 @@ class WebServer:
         print("Verfying using: ", global_config.discord_verify)
         return web.Response(text=global_config.discord_verify)
 
+    async def redirect_to_splatdle(self, request: web.Request) -> web.Response:
+        """Send legacy /splatdle traffic to splatdle.ink.
+
+        Args:
+            request: The HTTP request.
+
+        Returns:
+            A permanent redirect to the Splatdle site.
+        """
+        return web.HTTPMovedPermanently(global_config.splatdle_url)
+
     def _add_routes(self) -> None:
         """Configure all HTTP routes and CORS settings.
 
@@ -115,6 +126,10 @@ class WebServer:
         """
 
         self.app.router.add_get("/.well-known/discord", self.handle_discord_verification)
+        # Splatdle moved to its own domain. Old links, Discord embeds and
+        # bookmarks all point here, so send them on rather than 404.
+        self.app.router.add_get("/splatdle", self.redirect_to_splatdle)
+        self.app.router.add_get("/splatdle/{tail:.*}", self.redirect_to_splatdle)
         self.app.router.add_post(
             "/api/auth/discord/refresh-token", self.discord_token_handler.refresh_token)
         self.app.router.add_get(

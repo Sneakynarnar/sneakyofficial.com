@@ -5,7 +5,7 @@ import Developer from "./pages/Developer";
 import Entertainer from "./pages/Entertainer";
 import Musician from "./pages/Musician";
 import Background from "./components/Background";
-import Splatdle from "./pages/Splatdle";
+import ExternalRedirect from "./components/ExternalRedirect";
 import AuthCallback from "./pages/Authorised";
 import DevPortfolio from "./pages/DevPortfolio";
 import Tournament from "./pages/Tournament";
@@ -32,7 +32,8 @@ function App() {
       <Route path="/socials" element={<Entertainer />} />
       <Route path="/musician" element={<Musician />} />
       <Route path="/background" element={<Background />} />
-      <Route path="/splatdle" element={<Splatdle />} />
+      {/* Splatdle has its own domain now. */}
+      <Route path="/splatdle" element={<ExternalRedirect to="https://splatdle.ink" />} />
       <Route path="/authorised" element={<AuthCallback />} />
       <Route path="/portfolio" element={<DevPortfolio />} />
       <Route path="/tournament" element={<ErrorBoundary><Tournament /></ErrorBoundary>} />

@@ -7,14 +7,32 @@ type NavbarProps = {
 };
 
 const NAV_ITEMS = [
-  { path: '/', label: 'Home', color: 'rainbow' },
-  { path: '/developer', label: 'Developer', color: '#00ff88' },
-  { path: '/entertainer', label: 'Entertainer', color: '#ff6b6b' },
-  { path: '/musician', label: 'Musician', color: '#4ecdc4' },
-  { path: '/splatdle', label: 'Splatdle', color: '#f97316' },
+  { path: '/', label: 'Home', color: 'rainbow', external: false },
+  { path: '/developer', label: 'Developer', color: '#00ff88', external: false },
+  { path: '/entertainer', label: 'Entertainer', color: '#ff6b6b', external: false },
+  { path: '/musician', label: 'Musician', color: '#4ecdc4', external: false },
+  // Splatdle has its own domain now, so this one leaves the app.
+  { path: 'https://splatdle.ink', label: 'Splatdle', color: '#f97316', external: true },
 ] as const;
 
 type NavItem = (typeof NAV_ITEMS)[number];
+
+/** A nav entry, routed in-app or handed to the browser for another site. */
+function NavItemLink({
+  item, className, onClick, onMouseEnter, onMouseLeave, children,
+}: {
+  item: NavItem;
+  className?: string;
+  onClick?: () => void;
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
+  children: React.ReactNode;
+}) {
+  const props = { className, onClick, onMouseEnter, onMouseLeave };
+  return item.external
+    ? <a href={item.path} {...props}>{children}</a>
+    : <Link to={item.path} {...props}>{children}</Link>;
+}
 
 function getUnderlineStyle(item: NavItem, isActive: boolean): React.CSSProperties {
   if (!isActive) return {};
@@ -66,9 +84,9 @@ const Navbar = ({ className }: NavbarProps) => {
             {NAV_ITEMS.map((item, index) => {
               const isActive = index === displayIndex;
               return (
-                <Link
+                <NavItemLink
                   key={item.path}
-                  to={item.path}
+                  item={item}
                   className="relative px-3 py-2 text-sm font-semibold tracking-wide transition-all duration-300 hover:scale-105"
                   onMouseEnter={() => setHoveredIndex(index)}
                   onMouseLeave={() => setHoveredIndex(null)}
@@ -85,7 +103,7 @@ const Navbar = ({ className }: NavbarProps) => {
                     }`}
                     style={getUnderlineStyle(item, isActive)}
                   />
-                </Link>
+                </NavItemLink>
               );
             })}
           </div>
@@ -117,14 +135,14 @@ const Navbar = ({ className }: NavbarProps) => {
               {NAV_ITEMS.map((item, index) => {
                 const isActive = activeIndex === index;
                 return (
-                  <Link
+                  <NavItemLink
                     key={item.path}
-                    to={item.path}
+                    item={item}
                     onClick={() => setIsMobileMenuOpen(false)}
                     className="block px-4 py-3 text-sm font-medium rounded-lg hover:bg-white/10 transition-colors"
                   >
                     <span style={getTextStyle(item, isActive)}>{item.label}</span>
-                  </Link>
+                  </NavItemLink>
                 );
               })}
             </div>
