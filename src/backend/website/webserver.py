@@ -149,6 +149,8 @@ class WebServer:
         self.app.router.add_get(
             "/api/splatdle/activity", self.sneaky_api.serve_splatdle_activity)
         self.app.router.add_get(
+            "/api/splatdle/leaderboard", self.sneaky_api.serve_splatdle_leaderboard)
+        self.app.router.add_get(
             "/api/tournament/ws", self.sneaky_api.handle_tournament_ws)
         self.app.router.add_get(
             "/api/tournament/signups", self.sneaky_api.serve_tournament_signups)

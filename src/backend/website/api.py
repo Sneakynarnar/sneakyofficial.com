@@ -15,8 +15,13 @@ from ..bingo import BingoManager, REJECT_CATEGORIES, notifier as bingo_notifier
 from ..util.config import global_config
 import interactions
 import logging
+import time
 
 logger = logging.getLogger("API")
+
+# discord_id -> (fetched_at, {username, avatar_url}) for the public leaderboard.
+_name_cache: Dict[int, Any] = {}
+_NAME_CACHE_TTL = 3600
 
 
 def verify_tournament_admin(func: Callable) -> Callable:
@@ -1216,6 +1221,101 @@ class SneakyApi:
         if visitor_id and _presence.claim_visit(visitor_id):
             await _history.record_visit(visitor_id)
         return web.json_response({"ok": True})
+
+    async def serve_splatdle_leaderboard(self, request: Request) -> web.Response:
+        """Public Splatdle leaderboard: the global table, or just today's.
+
+        Mirrors what /splatdle-leaderboard shows in Discord so the site and the
+        bot can never disagree. Only players who logged in and finished a daily
+        game are in here — the game itself is playable anonymously.
+
+        Query:
+            scope: "global" (default) or "today".
+            limit: 1-100, default 25.
+        """
+        scope = "today" if request.rel_url.query.get("scope") == "today" else "global"
+        try:
+            limit = int(request.rel_url.query.get("limit", 25))
+        except ValueError:
+            limit = 25
+        limit = max(1, min(limit, 100))
+
+        try:
+            async with DBContextManager(use_dict=True) as cur:
+                if scope == "today":
+                    await cur.execute(
+                        "SELECT discord_id, guess_count, created_at FROM TodaysLeaderboard "
+                        "ORDER BY guess_count ASC, created_at ASC LIMIT %s",
+                        (limit,),
+                    )
+                else:
+                    # Same weighting as the bot: a low average only counts once
+                    # you have the games to back it up.
+                    await cur.execute(
+                        "SELECT discord_id, average_guess_count, streak, times_played, "
+                        "       (average_guess_count + 4.0 / SQRT(times_played)) AS weighted "
+                        "FROM UserStats WHERE times_played > 0 "
+                        "ORDER BY weighted ASC LIMIT %s",
+                        (limit,),
+                    )
+                records = await cur.fetchall()
+        except Exception:
+            logger.exception("serve_splatdle_leaderboard failed to read %s table", scope)
+            return web.json_response({"error": "Leaderboard unavailable"}, status=503)
+
+        names = await self._resolve_discord_names([r["discord_id"] for r in records])
+
+        entries = []
+        for i, r in enumerate(records):
+            discord_id = int(r["discord_id"])
+            name = names.get(discord_id) or {}
+            entry = {
+                "rank": i + 1,
+                "discordId": str(discord_id),
+                "username": name.get("username") or "Unknown player",
+                "avatarUrl": name.get("avatar_url"),
+            }
+            if scope == "today":
+                entry["guessCount"] = int(r["guess_count"])
+                entry["playedAt"] = r["created_at"].isoformat() if r["created_at"] else None
+            else:
+                entry["averageGuesses"] = float(r["average_guess_count"])
+                entry["weightedScore"] = round(float(r["weighted"]), 2)
+                entry["streak"] = int(r["streak"])
+                entry["timesPlayed"] = int(r["times_played"])
+            entries.append(entry)
+
+        return web.json_response({"scope": scope, "entries": entries})
+
+    async def _resolve_discord_names(self, discord_ids: list) -> Dict[int, Dict[str, Any]]:
+        """Turn Discord ids into usernames and avatars for a leaderboard page.
+
+        Cached for an hour: the leaderboard is public and can be reloaded as
+        often as anyone likes, and a table of 100 uncached ids would otherwise
+        be 100 calls to Discord every time.
+        """
+        now = time.monotonic()
+        resolved: Dict[int, Dict[str, Any]] = {}
+        for raw in discord_ids:
+            discord_id = int(raw)
+            cached = _name_cache.get(discord_id)
+            if cached and now - cached[0] < _NAME_CACHE_TTL:
+                resolved[discord_id] = cached[1]
+                continue
+            user = self.bot.get_user(discord_id)
+            if user is None:
+                try:
+                    user = await self.bot.fetch_user(discord_id)
+                except Exception:
+                    logger.warning("leaderboard could not resolve discord id %s", discord_id)
+                    user = None
+            info = {
+                "username": user.username if user else None,
+                "avatar_url": str(user.avatar_url) if user and user.avatar_url else None,
+            }
+            _name_cache[discord_id] = (now, info)
+            resolved[discord_id] = info
+        return resolved
 
     @verify_tournament_admin
     async def serve_splatdle_activity(self, request: Request, admin_id: int) -> web.Response:
