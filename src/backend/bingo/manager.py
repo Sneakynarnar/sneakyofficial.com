@@ -6,9 +6,10 @@ resulting pool, curates it, and draws random cards from it.
 
 Two ideas keep the pool honest:
 
-* A member gets exactly one accepted message. The lock is only taken once a
-  submission is *accepted*, so a badly formatted first attempt does not burn
-  their single go.
+* A member may contribute up to ten suggestions in total, spread over as many
+  messages as they like. A message that would take them past ten is refused
+  whole rather than part-counted, so nobody has to guess which of their ideas
+  survived.
 * A suggestion that has been drawn onto a saved card is marked used and never
   comes up again, which is what makes a second Bingo video possible without
   repeating squares.
@@ -24,7 +25,9 @@ from backend.util.content_filter import check_free_text
 
 logger = logging.getLogger("BingoManager")
 
-MAX_SUGGESTIONS = 3
+# How many suggestions one person may have in the pool at once, across every
+# message they send. Suggestions an admin rejects give the slot back.
+MAX_PER_PERSON = 10
 MIN_LENGTH = 5
 MAX_LENGTH = 200
 
@@ -51,6 +54,10 @@ def parse_submission(content: str) -> tuple[bool, Optional[str], list[str]]:
     Args:
         content: The raw message content.
 
+    How many is too many depends on how much of their allowance the member has
+    left, so that check lives in :meth:`BingoManager.record_submission` rather
+    than here.
+
     Returns:
         (ok, error, suggestions). When ok is False, error explains what the
         member needs to change and suggestions is empty.
@@ -69,13 +76,6 @@ def parse_submission(content: str) -> tuple[bool, Optional[str], list[str]]:
             "3. Third suggestion\n```"
         ), []
 
-    if len(found) > MAX_SUGGESTIONS:
-        return False, (
-            f"That message has {len(found)} suggestions and the limit is "
-            f"{MAX_SUGGESTIONS}. Nothing has been saved yet, so post again with "
-            f"your best {MAX_SUGGESTIONS}."
-        ), []
-
     seen: set[str] = set()
     for suggestion in found:
         ok, reason = check_free_text(suggestion, MIN_LENGTH, MAX_LENGTH, "Each suggestion")
@@ -85,7 +85,7 @@ def parse_submission(content: str) -> tuple[bool, Optional[str], list[str]]:
         if key in seen:
             return False, (
                 "Two of those suggestions are the same. Nothing has been saved, "
-                "so post again with three different ideas."
+                "so post again with different ideas."
             ), []
         seen.add(key)
 
@@ -114,16 +114,17 @@ _TABLES = (
          INDEX idx_guild_user (guild_id, discord_id),
          INDEX idx_pool (guild_id, excluded, used)
        )""",
-    """CREATE TABLE IF NOT EXISTS bingo_submitters (
+    """CREATE TABLE IF NOT EXISTS bingo_submission_messages (
+         message_id BIGINT NOT NULL,
          guild_id BIGINT NOT NULL,
          discord_id BIGINT NOT NULL,
-         message_id BIGINT NOT NULL,
          display_name VARCHAR(100) NOT NULL,
          accepted_count TINYINT NOT NULL DEFAULT 0,
          thread_id BIGINT DEFAULT NULL,
          notified_ids VARCHAR(255) DEFAULT NULL,
          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-         PRIMARY KEY (guild_id, discord_id)
+         PRIMARY KEY (message_id),
+         INDEX idx_member (guild_id, discord_id)
        )""",
     """CREATE TABLE IF NOT EXISTS bingo_cards (
          id INT AUTO_INCREMENT PRIMARY KEY,
@@ -144,9 +145,51 @@ _COLUMNS = (
     "ALTER TABLE bingo_suggestions ADD COLUMN reject_reason VARCHAR(300) DEFAULT NULL",
     "ALTER TABLE bingo_suggestions ADD COLUMN reviewed_at DATETIME DEFAULT NULL",
     "ALTER TABLE bingo_suggestions ADD COLUMN reviewed_by BIGINT DEFAULT NULL",
-    "ALTER TABLE bingo_submitters ADD COLUMN thread_id BIGINT DEFAULT NULL",
-    "ALTER TABLE bingo_submitters ADD COLUMN notified_ids VARCHAR(255) DEFAULT NULL",
+    "ALTER TABLE bingo_submission_messages ADD COLUMN thread_id BIGINT DEFAULT NULL",
+    "ALTER TABLE bingo_submission_messages ADD COLUMN notified_ids VARCHAR(255) DEFAULT NULL",
 )
+
+async def _migrate_submitters(cur: Any) -> None:
+    """Move the old one-row-per-member table to one row per message.
+
+    Members used to get a single submission, so the table was keyed by member.
+    They can now send several messages, and the thread and feedback bookkeeping
+    hangs off each message, so the key has to move with it.
+    """
+    await cur.execute("SHOW TABLES LIKE 'bingo_submitters'")
+    has_old = await cur.fetchone() is not None
+    await cur.execute("SHOW TABLES LIKE 'bingo_submission_messages'")
+    has_new = await cur.fetchone() is not None
+
+    if has_old and not has_new:
+        await cur.execute("RENAME TABLE bingo_submitters TO bingo_submission_messages")
+        has_new = True
+    if not has_new:
+        return
+
+    # The old primary key was (guild_id, discord_id); a member with two messages
+    # would collide on it.
+    await cur.execute(
+        """SELECT COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE
+           WHERE TABLE_SCHEMA = DATABASE()
+             AND TABLE_NAME = 'bingo_submission_messages'
+             AND CONSTRAINT_NAME = 'PRIMARY'"""
+    )
+    key_columns = {row[0] if isinstance(row, tuple) else row["COLUMN_NAME"]
+                   for row in await cur.fetchall()}
+    if key_columns == {"message_id"}:
+        return
+
+    await cur.execute("ALTER TABLE bingo_submission_messages DROP PRIMARY KEY, "
+                      "ADD PRIMARY KEY (message_id)")
+    try:
+        await cur.execute("ALTER TABLE bingo_submission_messages "
+                          "ADD INDEX idx_member (guild_id, discord_id)")
+    except Exception as e:
+        if "duplicate key name" not in str(e).lower():
+            raise
+    logger.info("Migrated bingo_submission_messages to a per-message primary key")
+
 
 _tables_ready = False
 
@@ -162,6 +205,7 @@ async def ensure_tables() -> None:
     if _tables_ready:
         return
     async with DBContextManager() as cur:
+        await _migrate_submitters(cur)
         for statement in _TABLES:
             await cur.execute(statement)
         for statement in _COLUMNS:
@@ -181,21 +225,36 @@ class BingoManager:
     # ------------------------------------------------------------------ #
 
     @staticmethod
-    async def get_submitter(guild_id: int, discord_id: int) -> Optional[dict[str, Any]]:
-        """Return a member's existing submission record, if they have one."""
+    async def allowance(guild_id: int, discord_id: int) -> tuple[int, int]:
+        """How much of their ten a member has spent, and how much is left.
+
+        Suggestions an admin rejected do not count. They are not in the pool,
+        and holding a slot against someone for an editorial call they cannot
+        appeal would be unfair.
+
+        Returns:
+            (used, remaining).
+        """
         await ensure_tables()
         async with DBContextManager(use_dict=True) as cur:
             await cur.execute(
-                "SELECT * FROM bingo_submitters WHERE guild_id = %s AND discord_id = %s",
+                """SELECT COUNT(*) AS used FROM bingo_suggestions
+                   WHERE guild_id = %s AND discord_id = %s AND status != 'rejected'""",
                 (guild_id, discord_id)
             )
-            return await cur.fetchone()
+            row = await cur.fetchone() or {}
+        used = int(row.get("used") or 0)
+        return used, max(0, MAX_PER_PERSON - used)
 
     @staticmethod
     async def record_submission(guild_id: int, channel_id: int, message_id: int,
                                 discord_id: int, display_name: str,
-                                suggestions: list[str]) -> tuple[bool, str]:
-        """Store an accepted submission and take the member's one-message lock.
+                                suggestions: list[str]) -> tuple[bool, str, int]:
+        """Store a submission, provided it fits inside the member's allowance.
+
+        A message that would take somebody past ten is refused whole. Saving
+        part of it would leave them guessing which ideas counted, and the
+        caller deletes the message so they can simply post a shorter one.
 
         Args:
             guild_id: Guild the message was posted in.
@@ -206,20 +265,36 @@ class BingoManager:
             suggestions: The parsed suggestions, in order.
 
         Returns:
-            (ok, message) where message is safe to show the member.
+            (ok, message, remaining) where message is safe to show the member
+            and remaining is how many more they may still submit.
         """
         await ensure_tables()
+        _, remaining = await BingoManager.allowance(guild_id, discord_id)
+
+        if len(suggestions) > remaining:
+            if remaining == 0:
+                return False, (
+                    f"You've already used all {MAX_PER_PERSON} of your Splatoon "
+                    "Bingo suggestions, so that message wasn't counted."
+                ), 0
+            return False, (
+                f"You can only submit {remaining} more "
+                f"suggestion{'s' if remaining != 1 else ''}, and that message had "
+                f"{len(suggestions)}. Nothing was saved, so post again with "
+                f"{remaining} or fewer."
+            ), remaining
+
         async with DBContextManager() as cur:
-            # The insert doubles as the lock: a second message racing the first
-            # loses here rather than half-writing a second set of suggestions.
+            # The insert doubles as a guard against the same message being
+            # processed twice, which catch-up and the live listener could race on.
             await cur.execute(
-                """INSERT IGNORE INTO bingo_submitters
-                   (guild_id, discord_id, message_id, display_name, accepted_count)
+                """INSERT IGNORE INTO bingo_submission_messages
+                   (message_id, guild_id, discord_id, display_name, accepted_count)
                    VALUES (%s, %s, %s, %s, %s)""",
-                (guild_id, discord_id, message_id, display_name[:100], len(suggestions))
+                (message_id, guild_id, discord_id, display_name[:100], len(suggestions))
             )
             if cur.rowcount == 0:
-                return False, "You've already submitted; only your first message counts."
+                return False, "That message has already been counted.", remaining
 
             for position, suggestion in enumerate(suggestions, start=1):
                 await cur.execute(
@@ -232,7 +307,8 @@ class BingoManager:
                 )
 
         count = len(suggestions)
-        return True, f"Saved {count} suggestion{'s' if count != 1 else ''}."
+        left = remaining - count
+        return True, f"Saved {count} suggestion{'s' if count != 1 else ''}.", left
 
     # ------------------------------------------------------------------ #
     #  Pool management                                                    #
@@ -337,17 +413,6 @@ class BingoManager:
             )
             return cur.rowcount
 
-    @staticmethod
-    async def reset_submitter(guild_id: int, discord_id: int) -> int:
-        """Let a member submit again by dropping their one-message lock."""
-        await ensure_tables()
-        async with DBContextManager() as cur:
-            await cur.execute(
-                "DELETE FROM bingo_submitters WHERE guild_id = %s AND discord_id = %s",
-                (guild_id, discord_id)
-            )
-            return cur.rowcount
-
     # ------------------------------------------------------------------ #
     #  Review                                                             #
     # ------------------------------------------------------------------ #
@@ -410,7 +475,7 @@ class BingoManager:
                 dropped = {str(i) for i in suggestion_ids}
                 for mid in message_ids:
                     await cur.execute(
-                        "SELECT notified_ids FROM bingo_submitters WHERE message_id = %s",
+                        "SELECT notified_ids FROM bingo_submission_messages WHERE message_id = %s",
                         (mid,)
                     )
                     row = await cur.fetchone()
@@ -418,7 +483,7 @@ class BingoManager:
                         continue
                     kept = [x for x in row["notified_ids"].split(",") if x.strip() and x not in dropped]
                     await cur.execute(
-                        "UPDATE bingo_submitters SET notified_ids = %s WHERE message_id = %s",
+                        "UPDATE bingo_submission_messages SET notified_ids = %s WHERE message_id = %s",
                         (",".join(kept) or None, mid)
                     )
 
@@ -445,7 +510,7 @@ class BingoManager:
                 return None
 
             await cur.execute(
-                "SELECT thread_id, notified_ids FROM bingo_submitters WHERE message_id = %s",
+                "SELECT thread_id, notified_ids FROM bingo_submission_messages WHERE message_id = %s",
                 (message_id,)
             )
             submitter = await cur.fetchone()
@@ -500,7 +565,7 @@ class BingoManager:
             )
             known = {int(r["message_id"]) for r in await cur.fetchall()}
             await cur.execute(
-                "SELECT message_id FROM bingo_submitters WHERE guild_id = %s",
+                "SELECT message_id FROM bingo_submission_messages WHERE guild_id = %s",
                 (guild_id,)
             )
             known.update(int(r["message_id"]) for r in await cur.fetchall())
@@ -517,14 +582,14 @@ class BingoManager:
         await ensure_tables()
         async with DBContextManager(use_dict=True) as cur:
             await cur.execute(
-                "SELECT notified_ids FROM bingo_submitters WHERE message_id = %s",
+                "SELECT notified_ids FROM bingo_submission_messages WHERE message_id = %s",
                 (message_id,)
             )
             row = await cur.fetchone()
             known = {x for x in (row["notified_ids"] or "").split(",") if x.strip()} if row else set()
             known.update(str(i) for i in reported_ids)
             await cur.execute(
-                "UPDATE bingo_submitters SET thread_id = %s, notified_ids = %s "
+                "UPDATE bingo_submission_messages SET thread_id = %s, notified_ids = %s "
                 "WHERE message_id = %s",
                 (thread_id, ",".join(sorted(known))[:255], message_id)
             )

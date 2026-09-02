@@ -327,18 +327,20 @@ CREATE TABLE IF NOT EXISTS bingo_suggestions (
   INDEX idx_pool (guild_id, excluded, used)
 );
 
--- The "one message per person" gate. A row only lands here once a member has
--- had a submission accepted, so a badly formatted first attempt does not burn
--- their single go.
-CREATE TABLE IF NOT EXISTS bingo_submitters (
+-- One row per accepted submission message. A member may send several, up to
+-- ten suggestions in total; this table carries the per-message bookkeeping for
+-- the feedback thread.
+CREATE TABLE IF NOT EXISTS bingo_submission_messages (
+  message_id BIGINT NOT NULL,
   guild_id BIGINT NOT NULL,
   discord_id BIGINT NOT NULL,
-  message_id BIGINT NOT NULL,
   display_name VARCHAR(100) NOT NULL,
   accepted_count TINYINT NOT NULL DEFAULT 0,
   thread_id BIGINT DEFAULT NULL,
+  notified_ids VARCHAR(255) DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (guild_id, discord_id)
+  PRIMARY KEY (message_id),
+  INDEX idx_member (guild_id, discord_id)
 );
 
 -- A generated card, kept so the squares it consumed stay out of future cards.
@@ -358,3 +360,9 @@ CREATE TABLE IF NOT EXISTS bingo_cards (
 -- ALTER TABLE bingo_suggestions ADD COLUMN reviewed_at DATETIME DEFAULT NULL;
 -- ALTER TABLE bingo_suggestions ADD COLUMN reviewed_by BIGINT DEFAULT NULL;
 -- ALTER TABLE bingo_submitters ADD COLUMN thread_id BIGINT DEFAULT NULL;
+--
+-- Migration for installs created before the ten-per-person rule:
+-- RENAME TABLE bingo_submitters TO bingo_submission_messages;
+-- ALTER TABLE bingo_submission_messages DROP PRIMARY KEY, ADD PRIMARY KEY (message_id);
+-- ALTER TABLE bingo_submission_messages ADD INDEX idx_member (guild_id, discord_id);
+-- ALTER TABLE bingo_submission_messages ADD COLUMN notified_ids VARCHAR(255) DEFAULT NULL;

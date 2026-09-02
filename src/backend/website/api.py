@@ -1423,16 +1423,3 @@ class SneakyApi:
         except Exception:
             logger.exception("bingo_admin_delete_card failed")
             return web.json_response({"error": "Server error"}, status=500)
-
-    @verify_tournament_admin
-    async def bingo_admin_reset_submitter(self, request: Request, admin_id: int) -> web.Response:
-        """Drop a member's one-message lock so they can submit again."""
-        try:
-            body = await request.json()
-            removed = await BingoManager.reset_submitter(
-                int(body.get("guild_id", 0)), int(body.get("discord_id", 0))
-            )
-            return web.json_response({"ok": True, "removed": removed})
-        except Exception:
-            logger.exception("bingo_admin_reset_submitter failed")
-            return web.json_response({"error": "Server error"}, status=500)

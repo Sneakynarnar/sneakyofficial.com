@@ -1,21 +1,21 @@
 """Splatoon Bingo suggestion channel.
 
 Members post challenge ideas in one dedicated channel. Every message there is
-checked against the posted rules: one accepted message per person, up to three
-numbered suggestions in it, nothing offensive and nothing empty. Accepted
+checked against the posted rules: ten suggestions per person in total, over as
+many messages as they like, nothing offensive and nothing empty. Accepted
 messages get their suggestions put into the pool the admin dashboard draws
-bingo cards from; ones the bot turns away get a ❌ and an explanation, sent by
-DM so the channel stays readable.
+bingo cards from; ones the bot cannot read get a ❌ and an explanation by DM.
+
+A message that would take somebody past ten is refused whole and deleted, with
+a DM saying how many they have left. Counting part of it would leave them
+guessing which of their ideas survived, and deleting keeps the channel to
+submissions that actually landed.
 
 Reactions track how far along a submission is:
 
 * ✅ 👁️ — the bot accepted it, an admin still has to review the suggestions
 * ✅      — every suggestion in that message was approved
 * ❌      — the bot turned the message away, or every suggestion was rejected
-
-A member is only locked out once a message has been *accepted*. Somebody whose
-first attempt was misformatted can fix it and post again, which is the rule
-working as intended rather than a loophole.
 
 On startup the bot reads back through the channel from the rules message and
 processes anything it missed while it was down, then repairs the reactions on
@@ -31,7 +31,7 @@ from interactions import (
 )
 from interactions.api.events import MessageCreate, Startup
 
-from backend.bingo import BingoManager, MAX_SUGGESTIONS, parse_submission
+from backend.bingo import BingoManager, MAX_PER_PERSON, parse_submission
 from backend.bingo import notifier
 from backend.util.config import global_config
 
@@ -61,9 +61,10 @@ RULES_TEXT = (
 )
 
 RULES_SUBMISSION = (
-    "• **ONE message per person**\n"
-    f"• You can submit up to **{MAX_SUGGESTIONS} suggestions** in your message\n"
-    "• Any messages sent after your first submission will be ignored\n"
+    f"• You can submit up to **{MAX_PER_PERSON} suggestions in total**\n"
+    "• Spread them over as many messages as you like\n"
+    f"• A message that would take you past {MAX_PER_PERSON} is deleted and none "
+    "of it counts, so I'll DM you how many you have left\n"
     "• Suggestions must be something that can actually be completed within a "
     "Splatoon game"
 )
@@ -106,6 +107,12 @@ def _rules_embed() -> Embed:
         RULES_FORMAT,
         inline=False,
     )
+    embed.add_field(
+        "Numbering",
+        "Just number them from 1 in each message. It's the running total across "
+        f"all your messages that has to stay under {MAX_PER_PERSON}.",
+        inline=False,
+    )
     embed.set_footer(text="The bot reacts ✅ when your submission is saved, or ❌ with a reason.")
     return embed
 
@@ -140,16 +147,21 @@ class BingoExt(interactions.Extension):
         return int(author.id) not in global_config.tournament_admin_ids
 
     async def _process_message(self, message: interactions.Message,
-                               notify: bool = True) -> str:
+                               notify: bool = True,
+                               delete_over_limit: bool = True) -> str:
         """Run one channel message through the submission rules.
 
         Args:
             message: The message to judge.
             notify: Whether to DM the author about the outcome. Catch-up turns
                 this down so a backlog cannot become a wall of DMs.
+            delete_over_limit: Whether a message that busts the member's
+                allowance is deleted. Off during catch-up, which would
+                otherwise quietly delete a pile of old messages nobody is
+                watching.
 
         Returns:
-            One of skipped, accepted, duplicate or invalid.
+            One of skipped, accepted, over_limit or invalid.
         """
         if not self._is_submission(message):
             return "skipped"
@@ -159,18 +171,6 @@ class BingoExt(interactions.Extension):
         guild_id = int(message.guild.id) if message.guild else BINGO_GUILD_ID
 
         try:
-            existing = await BingoManager.get_submitter(guild_id, author_id)
-            if existing:
-                await self._reject(
-                    message,
-                    "You've already submitted for Splatoon Bingo, and only your "
-                    "first message counts. Everything you sent in that message "
-                    "is safely in the pool — there'll be more Bingo videos, so "
-                    "keep your other ideas for next time!",
-                    notify=notify,
-                )
-                return "duplicate"
-
             ok, error, suggestions = parse_submission(message.content or "")
             if not ok:
                 await self._reject(message, error or "That submission couldn't be read.",
@@ -178,7 +178,7 @@ class BingoExt(interactions.Extension):
                 return "invalid"
 
             display_name = getattr(author, "display_name", None) or author.username
-            saved, msg = await BingoManager.record_submission(
+            saved, msg, remaining = await BingoManager.record_submission(
                 guild_id=guild_id,
                 channel_id=BINGO_CHANNEL_ID,
                 message_id=int(message.id),
@@ -187,17 +187,18 @@ class BingoExt(interactions.Extension):
                 suggestions=suggestions,
             )
             if not saved:
-                await self._reject(message, msg, notify=notify)
-                return "duplicate"
+                await self._over_limit(message, msg, notify=notify,
+                                       delete=delete_over_limit)
+                return "over_limit"
 
-            await self._accept(message, suggestions, notify=notify)
+            await self._accept(message, suggestions, remaining, notify=notify)
             return "accepted"
         except Exception:
             logger.exception("Failed to process bingo submission from %s", author_id)
             return "skipped"
 
     async def _accept(self, message: interactions.Message, suggestions: list[str],
-                      notify: bool = True) -> None:
+                      remaining: int, notify: bool = True) -> None:
         """React to and confirm an accepted submission."""
         # The notifier owns the reactions, so an accepted message picks up the
         # ✅ and the 👁️ that says an admin still has to look at it.
@@ -206,18 +207,43 @@ class BingoExt(interactions.Extension):
             return
         listed = "\n".join(f"{i}. {s}" for i, s in enumerate(suggestions, start=1))
         count = len(suggestions)
+        tail = (
+            f"You can still submit {remaining} more."
+            if remaining else
+            f"That's all {MAX_PER_PERSON} of your suggestions used."
+        )
         await self._notify(
             message,
             f"✅ Thanks! Your {count} Splatoon Bingo suggestion"
             f"{'s are' if count != 1 else ' is'} in:\n\n{listed}\n\n"
-            "That was your one submission, so anything you post after this "
-            "won't be counted. They'll be reviewed before they go on a card, and "
-            "I'll let you know here if any of them don't make it.",
+            f"{tail} They'll be reviewed before they go on a card, and I'll let "
+            "you know here if any of them don't make it.",
         )
+
+    async def _over_limit(self, message: interactions.Message, reason: str,
+                          notify: bool = True, delete: bool = True) -> None:
+        """Turn away a message that busts the member's allowance.
+
+        The message is deleted rather than left with a ❌, so the channel only
+        ever holds submissions that actually counted.
+        """
+        # DM first: once the message is gone there is no author to reply to.
+        if notify:
+            await self._notify(message, f"❌ {reason}", fallback=not delete)
+
+        if not delete:
+            await self._react(message, REJECTED_EMOJI)
+            return
+
+        try:
+            await message.delete()
+        except Exception:
+            logger.warning("Could not delete over-limit bingo message %s", message.id)
+            await self._react(message, REJECTED_EMOJI)
 
     async def _reject(self, message: interactions.Message, reason: str,
                       notify: bool = True) -> None:
-        """React to and explain a submission the bot turned away."""
+        """React to and explain a submission the bot could not read."""
         await self._react(message, REJECTED_EMOJI)
         if notify:
             await self._notify(message, f"❌ {reason}")
@@ -229,13 +255,23 @@ class BingoExt(interactions.Extension):
         except Exception:
             logger.warning("Could not react %s to message %s", emoji, message.id)
 
-    async def _notify(self, message: interactions.Message, text: str) -> None:
-        """DM the submitter, falling back to a self-deleting channel reply."""
+    async def _notify(self, message: interactions.Message, text: str,
+                      fallback: bool = True) -> None:
+        """DM the submitter, falling back to a self-deleting channel reply.
+
+        The fallback is turned off when the message itself is about to be
+        deleted, since a reply pointing at a message that no longer exists
+        explains nothing.
+        """
         try:
             await message.author.send(text)
             return
         except Exception:
-            logger.debug("DM to %s failed, replying in channel instead", message.author.id)
+            logger.debug("DM to %s failed", message.author.id)
+
+        if not fallback:
+            logger.warning("Could not tell %s why their message was removed", message.author.id)
+            return
 
         try:
             reply = await message.reply(text)
@@ -264,6 +300,9 @@ class BingoExt(interactions.Extension):
         run as often as you like. Everything it does know about is re-synced
         afterwards, which repairs reactions that were cleared or missed.
 
+        Over-limit messages found here are marked with a ❌ rather than deleted,
+        unlike the live path, so a backfill cannot quietly clear out history.
+
         Args:
             notify: Whether to DM authors about newly processed messages. Even
                 when on, each person is only DMed once per run, so a backlog
@@ -272,7 +311,7 @@ class BingoExt(interactions.Extension):
         Returns:
             Counts of what happened, for logging and the slash command.
         """
-        counts = {"scanned": 0, "accepted": 0, "duplicate": 0, "invalid": 0,
+        counts = {"scanned": 0, "accepted": 0, "over_limit": 0, "invalid": 0,
                   "skipped": 0, "resynced": 0}
 
         channel = await self.bot.fetch_channel(BINGO_CHANNEL_ID)
@@ -293,7 +332,10 @@ class BingoExt(interactions.Extension):
 
             author_id = int(message.author.id)
             should_dm = notify and author_id not in dmed
-            outcome = await self._process_message(message, notify=should_dm)
+            # Catch-up never deletes: a backlog nobody is watching is the wrong
+            # place to start removing people's messages.
+            outcome = await self._process_message(message, notify=should_dm,
+                                                  delete_over_limit=False)
             counts[outcome] = counts.get(outcome, 0) + 1
             if should_dm and outcome != "skipped":
                 dmed.add(author_id)
@@ -357,24 +399,10 @@ class BingoExt(interactions.Extension):
         embed = Embed(title="🎲 Bingo catch-up", color=global_config.theme_colour)
         embed.add_field("Scanned", str(counts["scanned"]), inline=True)
         embed.add_field("Newly accepted", str(counts["accepted"]), inline=True)
-        embed.add_field("Already submitted", str(counts["duplicate"]), inline=True)
+        embed.add_field("Over allowance", str(counts["over_limit"]), inline=True)
         embed.add_field("Badly formatted", str(counts["invalid"]), inline=True)
         embed.add_field("Reactions resynced", str(counts["resynced"]), inline=True)
         await ctx.send(embed=embed, ephemeral=True)
-
-    @bingo.subcommand(sub_cmd_name="reset", sub_cmd_description="Let a member submit again")
-    @slash_default_member_permission(Permissions.MANAGE_GUILD)
-    @slash_option(name="member", description="The member to unlock", required=True, opt_type=OptionType.USER)
-    async def bingo_reset(self, ctx: interactions.SlashContext, member: interactions.Member) -> None:
-        await ctx.defer(ephemeral=True)
-        removed = await BingoManager.reset_submitter(BINGO_GUILD_ID, int(member.id))
-        if removed:
-            text = (f"{member.mention} can submit again. Their existing suggestions are "
-                    "still in the pool — remove those from the admin dashboard if you "
-                    "want a clean slate.")
-        else:
-            text = f"{member.mention} hasn't submitted yet, so there was nothing to reset."
-        await ctx.send(text, ephemeral=True)
 
 
 def setup(bot: interactions.Client) -> None:
