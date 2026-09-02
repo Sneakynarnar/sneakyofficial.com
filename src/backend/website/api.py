@@ -11,6 +11,7 @@ from ..util import overlay_settings as _ov
 from ..util import splatdle_presence as _presence
 from . import splatdle_history as _history
 from ..tournament import TournamentManager
+from ..bingo import BingoManager
 from ..util.config import global_config
 import interactions
 import logging
@@ -1249,3 +1250,138 @@ class SneakyApi:
             data["history"] = None
             data["history_week"] = None
         return web.json_response(data)
+
+    # --------------------------------------------------------------------- #
+    #  Splatoon Bingo                                                        #
+    # --------------------------------------------------------------------- #
+
+    @verify_tournament_admin
+    async def bingo_admin_get(self, request: Request, admin_id: int) -> web.Response:
+        """Return the whole suggestion pool, saved cards and headline counts."""
+        try:
+            guild_id = request.rel_url.query.get("guild_id")
+            guild = int(guild_id) if guild_id else None
+            return web.json_response({
+                "suggestions": await BingoManager.list_suggestions(guild),
+                "cards": await BingoManager.list_cards(),
+                "stats": await BingoManager.get_stats(guild),
+            })
+        except Exception:
+            logger.exception("bingo_admin_get failed")
+            return web.json_response({"error": "Server error"}, status=500)
+
+    @verify_tournament_admin
+    async def bingo_admin_exclude(self, request: Request, admin_id: int) -> web.Response:
+        """Exclude suggestions from future draws, or put them back."""
+        try:
+            body = await request.json()
+            ids = [int(i) for i in body.get("ids", [])]
+            excluded = bool(body.get("excluded", True))
+            changed = await BingoManager.set_excluded(ids, excluded)
+            return web.json_response({"ok": True, "changed": changed})
+        except Exception:
+            logger.exception("bingo_admin_exclude failed")
+            return web.json_response({"error": "Server error"}, status=500)
+
+    @verify_tournament_admin
+    async def bingo_admin_used(self, request: Request, admin_id: int) -> web.Response:
+        """Mark suggestions as used, or release them back into the pool."""
+        try:
+            body = await request.json()
+            ids = [int(i) for i in body.get("ids", [])]
+            used = bool(body.get("used", True))
+            changed = await BingoManager.set_used(ids, used)
+            return web.json_response({"ok": True, "changed": changed})
+        except Exception:
+            logger.exception("bingo_admin_used failed")
+            return web.json_response({"error": "Server error"}, status=500)
+
+    @verify_tournament_admin
+    async def bingo_admin_edit(self, request: Request, admin_id: int) -> web.Response:
+        """Reword a single suggestion."""
+        try:
+            body = await request.json()
+            ok, msg = await BingoManager.edit_suggestion(
+                int(body.get("id", 0)), str(body.get("text", ""))
+            )
+            return web.json_response({"ok": ok, "message": msg}, status=200 if ok else 400)
+        except Exception:
+            logger.exception("bingo_admin_edit failed")
+            return web.json_response({"error": "Server error"}, status=500)
+
+    @verify_tournament_admin
+    async def bingo_admin_delete(self, request: Request, admin_id: int) -> web.Response:
+        """Delete suggestions outright."""
+        try:
+            body = await request.json()
+            ids = [int(i) for i in body.get("ids", [])]
+            deleted = await BingoManager.delete_suggestions(ids)
+            return web.json_response({"ok": True, "deleted": deleted})
+        except Exception:
+            logger.exception("bingo_admin_delete failed")
+            return web.json_response({"error": "Server error"}, status=500)
+
+    @verify_tournament_admin
+    async def bingo_admin_draw(self, request: Request, admin_id: int) -> web.Response:
+        """Draw a random card from the pool without saving or consuming it."""
+        try:
+            body = await request.json()
+            guild_id = body.get("guild_id")
+            ok, msg, cells = await BingoManager.draw_card(
+                rows=int(body.get("rows", 5)),
+                cols=int(body.get("cols", 5)),
+                free_space=bool(body.get("free_space", False)),
+                exclude_ids=[int(i) for i in body.get("exclude_ids", [])],
+                guild_id=int(guild_id) if guild_id else None,
+            )
+            return web.json_response(
+                {"ok": ok, "message": msg, "cells": cells}, status=200 if ok else 400
+            )
+        except Exception:
+            logger.exception("bingo_admin_draw failed")
+            return web.json_response({"error": "Server error"}, status=500)
+
+    @verify_tournament_admin
+    async def bingo_admin_save_card(self, request: Request, admin_id: int) -> web.Response:
+        """Save a drawn card, marking its squares used so they never repeat."""
+        try:
+            body = await request.json()
+            ok, msg, card_id = await BingoManager.save_card(
+                name=str(body.get("name", "")),
+                rows=int(body.get("rows", 5)),
+                cols=int(body.get("cols", 5)),
+                free_space=bool(body.get("free_space", False)),
+                cells=body.get("cells", []),
+            )
+            return web.json_response(
+                {"ok": ok, "message": msg, "card_id": card_id}, status=200 if ok else 400
+            )
+        except Exception:
+            logger.exception("bingo_admin_save_card failed")
+            return web.json_response({"error": "Server error"}, status=500)
+
+    @verify_tournament_admin
+    async def bingo_admin_delete_card(self, request: Request, admin_id: int) -> web.Response:
+        """Delete a saved card, optionally freeing its squares."""
+        try:
+            body = await request.json()
+            ok, msg = await BingoManager.delete_card(
+                int(body.get("card_id", 0)), bool(body.get("release", True))
+            )
+            return web.json_response({"ok": ok, "message": msg}, status=200 if ok else 400)
+        except Exception:
+            logger.exception("bingo_admin_delete_card failed")
+            return web.json_response({"error": "Server error"}, status=500)
+
+    @verify_tournament_admin
+    async def bingo_admin_reset_submitter(self, request: Request, admin_id: int) -> web.Response:
+        """Drop a member's one-message lock so they can submit again."""
+        try:
+            body = await request.json()
+            removed = await BingoManager.reset_submitter(
+                int(body.get("guild_id", 0)), int(body.get("discord_id", 0))
+            )
+            return web.json_response({"ok": True, "removed": removed})
+        except Exception:
+            logger.exception("bingo_admin_reset_submitter failed")
+            return web.json_response({"error": "Server error"}, status=500)

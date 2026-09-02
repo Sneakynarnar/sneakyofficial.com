@@ -235,6 +235,24 @@ class WebServer:
             "/api/admin/player/{player_id}", self.sneaky_api.admin_delete_player)
         self.app.router.add_post(
             "/api/admin/tournament/end", self.sneaky_api.admin_end_tournament)
+        self.app.router.add_get(
+            "/api/bingo/admin", self.sneaky_api.bingo_admin_get)
+        self.app.router.add_post(
+            "/api/bingo/admin/exclude", self.sneaky_api.bingo_admin_exclude)
+        self.app.router.add_post(
+            "/api/bingo/admin/used", self.sneaky_api.bingo_admin_used)
+        self.app.router.add_post(
+            "/api/bingo/admin/edit", self.sneaky_api.bingo_admin_edit)
+        self.app.router.add_post(
+            "/api/bingo/admin/delete", self.sneaky_api.bingo_admin_delete)
+        self.app.router.add_post(
+            "/api/bingo/admin/draw", self.sneaky_api.bingo_admin_draw)
+        self.app.router.add_post(
+            "/api/bingo/admin/card", self.sneaky_api.bingo_admin_save_card)
+        self.app.router.add_post(
+            "/api/bingo/admin/card/delete", self.sneaky_api.bingo_admin_delete_card)
+        self.app.router.add_post(
+            "/api/bingo/admin/reset-submitter", self.sneaky_api.bingo_admin_reset_submitter)
 
         logger.debug("Static directory: %s", self.static_dir)
         assets_dir = os.path.join(self.static_dir, "assets")

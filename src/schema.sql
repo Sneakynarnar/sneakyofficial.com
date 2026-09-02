@@ -298,3 +298,51 @@ play_date DATE NOT NULL,
 UNIQUE KEY uq_player_day (discord_id, play_date),
 INDEX idx_play_date (play_date)
 );
+
+-- ---------------------------------------------------------------------------
+-- Splatoon Bingo
+-- ---------------------------------------------------------------------------
+
+-- One row per accepted suggestion. A member may contribute up to three, all
+-- carried on a single Discord message.
+CREATE TABLE IF NOT EXISTS bingo_suggestions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  guild_id BIGINT NOT NULL,
+  channel_id BIGINT NOT NULL,
+  message_id BIGINT NOT NULL,
+  discord_id BIGINT NOT NULL,
+  display_name VARCHAR(100) NOT NULL,
+  position TINYINT NOT NULL,
+  suggestion VARCHAR(300) NOT NULL,
+  excluded TINYINT NOT NULL DEFAULT 0,
+  used TINYINT NOT NULL DEFAULT 0,
+  used_card_id INT DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_message_position (message_id, position),
+  INDEX idx_guild_user (guild_id, discord_id),
+  INDEX idx_pool (guild_id, excluded, used)
+);
+
+-- The "one message per person" gate. A row only lands here once a member has
+-- had a submission accepted, so a badly formatted first attempt does not burn
+-- their single go.
+CREATE TABLE IF NOT EXISTS bingo_submitters (
+  guild_id BIGINT NOT NULL,
+  discord_id BIGINT NOT NULL,
+  message_id BIGINT NOT NULL,
+  display_name VARCHAR(100) NOT NULL,
+  accepted_count TINYINT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (guild_id, discord_id)
+);
+
+-- A generated card, kept so the squares it consumed stay out of future cards.
+CREATE TABLE IF NOT EXISTS bingo_cards (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(120) NOT NULL,
+  card_rows TINYINT NOT NULL,
+  card_cols TINYINT NOT NULL,
+  free_space TINYINT NOT NULL DEFAULT 0,
+  cells JSON NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

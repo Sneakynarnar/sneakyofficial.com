@@ -102,3 +102,47 @@ def _normalise(text: str) -> str:
 
     # Keep only alphanumeric so punctuation gaps can't hide words
     return re.sub(r"[^a-z]", "", "".join(result))
+
+
+# Slurs that should be caught even when buried inside a longer word, since
+# there is no innocent word that contains them.
+_HARD_BLOCKED: frozenset[str] = frozenset({
+    "nigger", "nigga", "faggot", "kike", "chink", "wetback", "tranny",
+    "rapist", "pedophile", "paedophile",
+})
+
+
+def check_free_text(text: str, min_len: int = 5, max_len: int = 200,
+                    label: str = "Suggestion") -> tuple[bool, str | None]:
+    """Validate a free-form sentence such as a bingo challenge.
+
+    Unlike :func:`check_team_name` this matches whole words rather than
+    substrings. A sentence gets normalised word by word, so ordinary English
+    ("classic", "pass the zone", "bass") no longer trips the short entries in
+    the blocked list. Only the unambiguous slurs in ``_HARD_BLOCKED`` are still
+    matched anywhere inside a word.
+
+    Returns (True, None) when the text is acceptable, (False, reason) otherwise.
+    """
+    stripped = " ".join(text.split())
+
+    if len(stripped) < min_len:
+        return False, f"{label} must be at least {min_len} characters."
+
+    if len(stripped) > max_len:
+        return False, f"{label} must be {max_len} characters or fewer."
+
+    if not _normalise(stripped):
+        return False, f"{label} needs to contain actual words."
+
+    squashed = _normalise(stripped)
+    for word in _HARD_BLOCKED:
+        if word in squashed:
+            return False, f"{label} contains content that isn't allowed."
+
+    for raw_word in re.split(r"[^\w']+", stripped):
+        normalised = _normalise(raw_word)
+        if normalised and normalised in _BLOCKED:
+            return False, f"{label} contains content that isn't allowed."
+
+    return True, None
