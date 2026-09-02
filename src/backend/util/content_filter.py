@@ -112,14 +112,39 @@ _HARD_BLOCKED: frozenset[str] = frozenset({
 })
 
 
+# Roots this long can be matched as prefixes, which catches the inflections
+# ("fucking", "retarded", "bitches") that exact word matching walks straight
+# past. Shorter roots stay exact, so "ass" cannot fire on "class" or "bass".
+_PREFIX_MIN = 4
+
+# Ordinary words that happen to begin with one of those roots.
+_ALLOWED: frozenset[str] = frozenset({
+    "arsenal", "arsenals", "arsenic",
+    "cockpit", "cockpits", "cockroach", "cockroaches", "cocktail", "cocktails",
+    "spice", "spiced", "spices", "spicy", "spicier", "spiciest",
+    "pedometer", "pedometers",
+    "paediatric", "paediatrics", "paediatrician",
+})
+
+
+def _word_is_blocked(normalised: str) -> bool:
+    """Whether one normalised word matches the blocked list."""
+    if not normalised or normalised in _ALLOWED:
+        return False
+    if normalised in _BLOCKED:
+        return True
+    return any(len(root) >= _PREFIX_MIN and normalised.startswith(root)
+               for root in _BLOCKED)
+
+
 def check_free_text(text: str, min_len: int = 5, max_len: int = 200,
                     label: str = "Suggestion") -> tuple[bool, str | None]:
     """Validate a free-form sentence such as a bingo challenge.
 
-    Unlike :func:`check_team_name` this matches whole words rather than
-    substrings. A sentence gets normalised word by word, so ordinary English
-    ("classic", "pass the zone", "bass") no longer trips the short entries in
-    the blocked list. Only the unambiguous slurs in ``_HARD_BLOCKED`` are still
+    Unlike :func:`check_team_name` this matches words rather than substrings, so
+    ordinary English ("classic", "pass the zone", "bass") no longer trips the
+    short entries in the blocked list. Longer roots also match as prefixes to
+    catch inflections, and the unambiguous slurs in ``_HARD_BLOCKED`` are still
     matched anywhere inside a word.
 
     Returns (True, None) when the text is acceptable, (False, reason) otherwise.
@@ -141,8 +166,7 @@ def check_free_text(text: str, min_len: int = 5, max_len: int = 200,
             return False, f"{label} contains content that isn't allowed."
 
     for raw_word in re.split(r"[^\w']+", stripped):
-        normalised = _normalise(raw_word)
-        if normalised and normalised in _BLOCKED:
+        if _word_is_blocked(_normalise(raw_word)):
             return False, f"{label} contains content that isn't allowed."
 
     return True, None

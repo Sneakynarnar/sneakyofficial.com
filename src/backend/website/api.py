@@ -1356,7 +1356,12 @@ class SneakyApi:
 
     @verify_tournament_admin
     async def bingo_admin_resync(self, request: Request, admin_id: int) -> web.Response:
-        """Re-run the channel catch-up and repair reactions on every submission."""
+        """Re-run the channel catch-up and repair reactions on every submission.
+
+        With notify on this also does retroactively what the live path does:
+        members are DMed their own text back and unusable messages are cleared
+        away, but only once that DM has landed.
+        """
         try:
             # Registered under the class name, with the module name as a fallback.
             extension = self.bot.get_ext("BingoExt") or self.bot.get_ext("backend.bot.bingo")
@@ -1364,7 +1369,8 @@ class SneakyApi:
                 return web.json_response(
                     {"ok": False, "message": "The bingo bot extension isn't loaded."}, status=503
                 )
-            counts = await extension.catch_up(notify=False)
+            body = await request.json() if request.can_read_body else {}
+            counts = await extension.catch_up(notify=bool(body.get("notify", True)))
             return web.json_response({
                 "ok": True,
                 "counts": counts,

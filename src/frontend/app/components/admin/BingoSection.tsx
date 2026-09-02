@@ -178,11 +178,21 @@ function StatsRow({ stats }: { stats: Stats }) {
 
 function ResyncBar({ onDone, flash }: { onDone: () => void; flash: (t: string, ok: boolean) => void }) {
   const [busy, setBusy] = useState(false);
+  const [tidy, setTidy] = useState(true);
 
   const resync = async () => {
+    if (tidy && !confirm(
+      "This will DM people about anything the bot missed, and delete messages it " +
+      "can't use once the author has been sent their text back. Continue?"
+    )) return;
+
     setBusy(true);
     try {
-      const { data } = await axios.post(`${API_URL}/api/bingo/admin/resync`, {}, { withCredentials: true });
+      const { data } = await axios.post(
+        `${API_URL}/api/bingo/admin/resync`,
+        { notify: tidy },
+        { withCredentials: true },
+      );
       flash(data.message ?? "Resynced.", data.ok !== false);
       if (data.ok !== false) onDone();
     } catch {
@@ -199,6 +209,15 @@ function ResyncBar({ onDone, flash }: { onDone: () => void; flash: (t: string, o
         since and go back over every submission correcting its reactions
         (✅ read · 👁️ awaiting review · ☑️ approved · ❌ nothing approved).
       </p>
+      <label className="flex items-center gap-1.5 text-xs text-slate-400">
+        <input
+          type="checkbox"
+          checked={tidy}
+          onChange={(e) => setTidy(e.target.checked)}
+          className="accent-indigo-500"
+        />
+        DM people and tidy the channel
+      </label>
       <button onClick={resync} disabled={busy} className={miniButton}>
         {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
         Catch up now

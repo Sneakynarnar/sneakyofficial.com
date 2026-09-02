@@ -23,8 +23,8 @@ On startup the bot reads back through the channel from the rules message and
 processes anything it missed while it was down, then repairs the reactions on
 everything it already knows about.
 """
-import asyncio
 import logging
+from typing import Optional
 
 import interactions
 from interactions import (
@@ -48,9 +48,6 @@ REJECTED_EMOJI = notifier.REJECTED_EMOJI
 # anything said before it are never treated as submissions.
 CATCHUP_AFTER_MESSAGE_ID = 1544679218305310781
 CATCHUP_LIMIT = 2000
-
-# How long a fallback in-channel reply stays up when a member's DMs are closed.
-_FALLBACK_REPLY_TTL = 30
 
 RULES_TEXT = (
     "As I've said, I want to do some long form content so introducing my "
@@ -91,6 +88,34 @@ RULES_FORMAT = (
     "```\n1. First suggestion\n2. Second suggestion\n```\n"
     "```\n- First suggestion\n- Second suggestion\n```"
 )
+
+
+# Discord caps a message at 2000 characters; leave room for the explanation
+# wrapped around the quoted text.
+_MAX_MESSAGE = 1900
+
+
+def _handback_text(reason: str, content: str) -> Optional[str]:
+    """Compose the "here's your message back" note, or None if it won't fit.
+
+    Returning None is the caller's signal that the original must be left where
+    it is: deleting a message we cannot hand back in full would destroy the only
+    copy of what somebody wrote.
+    """
+    stripped = (content or "").strip()
+    if not stripped:
+        return None
+
+    head = (
+        f"❌ {reason}\n\n"
+        "Here's your message back so you can copy it, fix it and post it again:"
+    )
+    # A code block gives Discord a copy button, but their own fences would end
+    # ours early, so those go out as plain text instead.
+    body = f"\n\n{stripped}" if "```" in stripped else f"\n\n```\n{stripped}\n```"
+
+    text = head + body
+    return text if len(text) <= _MAX_MESSAGE else None
 
 
 def _rules_embed() -> Embed:
@@ -153,17 +178,16 @@ class BingoExt(interactions.Extension):
 
     async def _process_message(self, message: interactions.Message,
                                notify: bool = True,
-                               delete_over_limit: bool = True) -> str:
+                               may_delete: bool = True) -> str:
         """Run one channel message through the submission rules.
 
         Args:
             message: The message to judge.
             notify: Whether to DM the author about the outcome. Catch-up turns
                 this down so a backlog cannot become a wall of DMs.
-            delete_over_limit: Whether a message that busts the member's
-                allowance is deleted. Off during catch-up, which would
-                otherwise quietly delete a pile of old messages nobody is
-                watching.
+            may_delete: Whether a message the bot turns away may be deleted.
+                Deletion only ever happens once the member has been DMed their
+                own text back, so nothing is lost either way.
 
         Returns:
             One of skipped, accepted, over_limit or invalid.
@@ -178,8 +202,8 @@ class BingoExt(interactions.Extension):
         try:
             ok, error, suggestions = parse_submission(message.content or "")
             if not ok:
-                await self._reject(message, error or "That submission couldn't be read.",
-                                   notify=notify)
+                await self._turn_away(message, error or "That submission couldn't be read.",
+                                      notify=notify, may_delete=may_delete)
                 return "invalid"
 
             display_name = getattr(author, "display_name", None) or author.username
@@ -192,8 +216,7 @@ class BingoExt(interactions.Extension):
                 suggestions=suggestions,
             )
             if not saved:
-                await self._over_limit(message, msg, notify=notify,
-                                       delete=delete_over_limit)
+                await self._turn_away(message, msg, notify=notify, may_delete=may_delete)
                 return "over_limit"
 
             await self._accept(message, suggestions, remaining, notify=notify)
@@ -217,7 +240,7 @@ class BingoExt(interactions.Extension):
             if remaining else
             f"That's all {MAX_PER_PERSON} of your suggestions used."
         )
-        await self._notify(
+        await self._deliver(
             message,
             f"✅ Thanks! Your {count} Splatoon Bingo suggestion"
             f"{'s are' if count != 1 else ' is'} in:\n\n{listed}\n\n"
@@ -225,33 +248,31 @@ class BingoExt(interactions.Extension):
             "you know here if any of them don't make it.",
         )
 
-    async def _over_limit(self, message: interactions.Message, reason: str,
-                          notify: bool = True, delete: bool = True) -> None:
-        """Turn away a message that busts the member's allowance.
+    async def _turn_away(self, message: interactions.Message, reason: str,
+                         notify: bool = True, may_delete: bool = True) -> None:
+        """Turn a message away, handing the member their text back to fix.
 
-        The message is deleted rather than left with a ❌, so the channel only
-        ever holds submissions that actually counted.
+        The message is deleted so the channel only holds submissions that
+        counted, but only once the member actually has their words back. If the
+        DM did not land, or the message was too long to quote, the original
+        stays put with a ❌ rather than being destroyed.
         """
-        # DM first: once the message is gone there is no author to reply to.
+        handback = _handback_text(reason, message.content or "")
+
+        outcome = "skipped"
         if notify:
-            await self._notify(message, f"❌ {reason}", fallback=not delete)
+            outcome = await self._deliver(message, handback or f"❌ {reason}")
 
-        if not delete:
-            await self._react(message, REJECTED_EMOJI)
-            return
+        # A channel reply deletes itself after a couple of minutes, so it is not
+        # somewhere their only copy can safely live.
+        if may_delete and handback is not None and outcome == "dm":
+            try:
+                await message.delete()
+                return
+            except Exception:
+                logger.warning("Could not delete bingo message %s", message.id)
 
-        try:
-            await message.delete()
-        except Exception:
-            logger.warning("Could not delete over-limit bingo message %s", message.id)
-            await self._react(message, REJECTED_EMOJI)
-
-    async def _reject(self, message: interactions.Message, reason: str,
-                      notify: bool = True) -> None:
-        """React to and explain a submission the bot could not read."""
         await self._react(message, REJECTED_EMOJI)
-        if notify:
-            await self._notify(message, f"❌ {reason}")
 
     async def _react(self, message: interactions.Message, emoji: str) -> None:
         """Add a verdict reaction, tolerating missing permissions."""
@@ -260,30 +281,29 @@ class BingoExt(interactions.Extension):
         except Exception:
             logger.warning("Could not react %s to message %s", emoji, message.id)
 
-    async def _notify(self, message: interactions.Message, text: str,
-                      fallback: bool = True) -> None:
+    async def _deliver(self, message: interactions.Message, text: str) -> str:
         """DM the submitter, falling back to a self-deleting channel reply.
 
-        The fallback is turned off when the message itself is about to be
-        deleted, since a reply pointing at a message that no longer exists
-        explains nothing.
+        Returns:
+            "dm", "channel" or "failed", so the caller can tell whether the
+            member is holding a copy they will still have tomorrow.
         """
         try:
             await message.author.send(text)
-            return
+            return "dm"
         except Exception:
             logger.debug("DM to %s failed", message.author.id)
 
-        if not fallback:
-            logger.warning("Could not tell %s why their message was removed", message.author.id)
-            return
-
         try:
-            reply = await message.reply(text)
-            await asyncio.sleep(_FALLBACK_REPLY_TTL)
-            await reply.delete()
+            await message.reply(
+                f"{message.author.mention} your DMs are closed, so here's this in "
+                "the channel. It'll disappear in a couple of minutes.\n\n" + text,
+                delete_after=notifier.FALLBACK_REPLY_TTL,
+            )
+            return "channel"
         except Exception:
             logger.warning("Could not notify %s about their submission", message.author.id)
+            return "failed"
 
     # ------------------------------------------------------------------ #
     #  Startup catch-up                                                   #
@@ -305,13 +325,14 @@ class BingoExt(interactions.Extension):
         run as often as you like. Everything it does know about is re-synced
         afterwards, which repairs reactions that were cleared or missed.
 
-        Over-limit messages found here are marked with a ❌ rather than deleted,
-        unlike the live path, so a backfill cannot quietly clear out history.
+        Messages the bot has to turn away get the same treatment as they would
+        live: the member is DMed their own text back and the message is deleted,
+        but only once that DM has landed. With notify off nothing is deleted at
+        all, since nobody would have been handed their words.
 
         Args:
-            notify: Whether to DM authors about newly processed messages. Even
-                when on, each person is only DMed once per run, so a backlog
-                cannot turn into a wall of DMs.
+            notify: Whether to DM authors about newly processed messages, and
+                therefore whether messages the bot turns away may be deleted.
 
         Returns:
             Counts of what happened, for logging and the slash command.
@@ -325,7 +346,6 @@ class BingoExt(interactions.Extension):
             return counts
 
         known = await BingoManager.known_message_ids(BINGO_GUILD_ID)
-        dmed: set[int] = set()
 
         # history(after=...) walks forward in time, which matters: the ten per
         # person allowance has to be spent in the order people posted.
@@ -335,15 +355,12 @@ class BingoExt(interactions.Extension):
             if int(message.id) in known or not self._is_submission(message):
                 continue
 
-            author_id = int(message.author.id)
-            should_dm = notify and author_id not in dmed
-            # Catch-up never deletes: a backlog nobody is watching is the wrong
-            # place to start removing people's messages.
-            outcome = await self._process_message(message, notify=should_dm,
-                                                  delete_over_limit=False)
+            # Every DM here carries something the member needs: their own text
+            # back, or what happened to it. Capping them per person would mean
+            # deleting a message whose words nobody had been given.
+            outcome = await self._process_message(message, notify=notify,
+                                                  may_delete=notify)
             counts[outcome] = counts.get(outcome, 0) + 1
-            if should_dm and outcome != "skipped":
-                dmed.add(author_id)
 
         # Reactions drift when the bot is offline or a member clears them, so
         # bring every stored submission back to what its review state says.
@@ -394,11 +411,11 @@ class BingoExt(interactions.Extension):
     @slash_default_member_permission(Permissions.MANAGE_GUILD)
     @slash_option(
         name="notify",
-        description="DM authors about newly processed messages (default: no)",
+        description="DM authors, and clear away messages once they have their text back (default: yes)",
         required=False,
         opt_type=OptionType.BOOLEAN,
     )
-    async def bingo_catchup(self, ctx: interactions.SlashContext, notify: bool = False) -> None:
+    async def bingo_catchup(self, ctx: interactions.SlashContext, notify: bool = True) -> None:
         await ctx.defer(ephemeral=True)
         counts = await self.catch_up(notify=notify)
         embed = Embed(title="🎲 Bingo catch-up", color=global_config.theme_colour)
