@@ -1704,7 +1704,7 @@ export default function Tournament() {
             )}
             {!authLoading && isAdmin && (
               <Link
-                to="/tournament/admin"
+                to="/admin"
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-yellow-600/40 text-yellow-400 hover:text-yellow-300 hover:border-yellow-500/60 text-xs font-medium transition-colors"
               >
                 <Trophy className="w-3.5 h-3.5" /> Admin

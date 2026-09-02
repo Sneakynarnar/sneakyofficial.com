@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import ErrorBoundary from "./components/ErrorBoundary";
 import HomePage from "./pages/Home";
 import Developer from "./pages/Developer";
@@ -9,7 +9,7 @@ import Splatdle from "./pages/Splatdle";
 import AuthCallback from "./pages/Authorised";
 import DevPortfolio from "./pages/DevPortfolio";
 import Tournament from "./pages/Tournament";
-import TournamentAdmin from "./pages/TournamentAdmin";
+import Admin from "./pages/Admin";
 import Leaderboard from "./pages/Leaderboard";
 import Players from "./pages/Players";
 import OverlayMatch from "./pages/overlay/OverlayMatch";
@@ -36,7 +36,9 @@ function App() {
       <Route path="/authorised" element={<AuthCallback />} />
       <Route path="/portfolio" element={<DevPortfolio />} />
       <Route path="/tournament" element={<ErrorBoundary><Tournament /></ErrorBoundary>} />
-      <Route path="/tournament/admin" element={<ErrorBoundary><TournamentAdmin /></ErrorBoundary>} />
+      <Route path="/admin" element={<ErrorBoundary><Admin /></ErrorBoundary>} />
+      {/* The admin dashboard covers more than the tournament now; keep old bookmarks working. */}
+      <Route path="/tournament/admin" element={<Navigate to="/admin" replace />} />
       <Route path="/leaderboard" element={<Leaderboard />} />
       <Route path="/players" element={<Players />} />
       <Route path="/overlay" element={<OverlayIndex />} />
