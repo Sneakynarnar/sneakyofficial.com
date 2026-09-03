@@ -12,6 +12,7 @@ import Tournament from "./pages/Tournament";
 import Admin from "./pages/Admin";
 import Leaderboard from "./pages/Leaderboard";
 import Players from "./pages/Players";
+import BingoCard from "./pages/BingoCard";
 import OverlayMatch from "./pages/overlay/OverlayMatch";
 import OverlayBracket from "./pages/overlay/OverlayBracket";
 import OverlayLeaderboard from "./pages/overlay/OverlayLeaderboard";
@@ -42,6 +43,7 @@ function App() {
       <Route path="/tournament/admin" element={<Navigate to="/admin" replace />} />
       <Route path="/leaderboard" element={<Leaderboard />} />
       <Route path="/players" element={<Players />} />
+      <Route path="/bingo" element={<ErrorBoundary><BingoCard /></ErrorBoundary>} />
       <Route path="/overlay" element={<OverlayIndex />} />
       <Route path="/overlay/match" element={<OverlayMatch />} />
       <Route path="/overlay/bracket" element={<OverlayBracket />} />

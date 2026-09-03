@@ -124,7 +124,7 @@ export async function ensureCardFonts(): Promise<void> {
  * The preview and the download are two separate renders; without a fixed seed
  * they would disagree, and every redraw would shuffle the ink about.
  */
-function seeded(seed: number): () => number {
+export function seeded(seed: number): () => number {
   let state = seed >>> 0;
   return () => {
     state = (state + 0x6d2b79f5) >>> 0;
@@ -136,7 +136,7 @@ function seeded(seed: number): () => number {
 }
 
 /** Turn a string into a seed, so each square splatters to suit its own text. */
-function hash(text: string): number {
+export function hash(text: string): number {
   let value = 0x811c9dc5;
   for (let i = 0; i < text.length; i += 1) {
     value ^= text.charCodeAt(i);
@@ -145,7 +145,7 @@ function hash(text: string): number {
   return value >>> 0;
 }
 
-interface SplatOptions {
+export interface SplatOptions {
   /** How many lobes ring the body of the splat. */
   points?: number;
   /** How far those lobes stray from the radius, 0 to 1. */
@@ -170,7 +170,7 @@ interface SplatOptions {
  * pieces overlap. Drawing the outline point by point instead gives you
  * triangular spikes, which is what ink emphatically does not look like.
  */
-function splat(
+export function splat(
   ctx: CanvasRenderingContext2D,
   cx: number, cy: number, radius: number,
   rng: () => number,
@@ -418,6 +418,38 @@ function roundedRect(
 /* ------------------------------------------------------------------ */
 /*  The card                                                           */
 /* ------------------------------------------------------------------ */
+
+/** Where everything sits on a card of a given size, in layout pixels. */
+export interface CardGeometry {
+  width: number;
+  height: number;
+  cellSize: number;
+  padding: number;
+  /** Top edge of the grid. */
+  gridTop: number;
+  rows: number;
+  cols: number;
+}
+
+/**
+ * Work out a card's measurements without drawing it.
+ *
+ * The player needs these to know which square a click landed in and where to
+ * put its mark, and it must agree with the drawing exactly or the marks sit
+ * off their squares.
+ */
+export function cardGeometry(rows: number, cols: number, hasSubtitle: boolean): CardGeometry {
+  const gridWidth = cols * CELL_SIZE;
+  return {
+    width: gridWidth + PADDING * 2,
+    height: rows * CELL_SIZE + PADDING * 2 + HEADER_HEIGHT + (hasSubtitle ? FOOTER_HEIGHT : 0),
+    cellSize: CELL_SIZE,
+    padding: PADDING,
+    gridTop: PADDING + HEADER_HEIGHT,
+    rows,
+    cols,
+  };
+}
 
 export interface DrawOptions {
   cells: BingoCell[];

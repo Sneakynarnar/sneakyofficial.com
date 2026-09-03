@@ -7,8 +7,11 @@ import {
 import {
   CARD_THEMES, cardToPngBlob, drawBingoCard, ensureCardFonts,
   type BingoCell, type DrawOptions,
-} from "./bingoCanvas";
-import { DEFAULT_PAIR, INK_PAIRS, inkPairsByGame } from "./inkPairs";
+} from "../bingo/bingoCanvas";
+import { DEFAULT_PAIR, INK_PAIRS, inkPairsByGame } from "../bingo/inkPairs";
+import {
+  encodeBingoFile, ENCODINGS, FILE_EXTENSION, type Encoding,
+} from "../bingo/bingoFile";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
 const GUILD_ID = import.meta.env.VITE_GUILD_ID ?? "";
@@ -265,6 +268,7 @@ function CardStudio({ suggestions, pinned, onUnpin, onSaved, flash }: StudioProp
   const [themeId, setThemeId]     = useState(CARD_THEMES[0].id);
   const [credits, setCredits]     = useState(true);
   const [balance, setBalance]     = useState(100);
+  const [encoding, setEncoding]   = useState<Encoding>("deflate");
   const [cells, setCells]         = useState<BingoCell[] | null>(null);
   const [drawing, setDrawing]     = useState(false);
   const [saving, setSaving]       = useState(false);
@@ -350,6 +354,26 @@ function CardStudio({ suggestions, pinned, onUnpin, onSaved, flash }: StudioProp
     const link = document.createElement("a");
     link.href = url;
     link.download = `${(title.trim() || "bingo-card").toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${rows}x${cols}.png`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  /** Write the card out for the player page at /bingo to open. */
+  const exportFile = async () => {
+    if (!cells) return;
+    const text = await encodeBingoFile({
+      title, subtitle, rows, cols,
+      freeText: freeText.trim() || "FREE",
+      accent, secondary, themeId, showCredits: credits,
+      cells: cells.map((cell) =>
+        cell.free ? { ...cell, text: freeText.trim() || "FREE" } : cell),
+    }, encoding);
+
+    const blob = new Blob([text], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${(title.trim() || "bingo-card").toLowerCase().replace(/[^a-z0-9]+/g, "-")}${FILE_EXTENSION}`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -550,6 +574,22 @@ function CardStudio({ suggestions, pinned, onUnpin, onSaved, flash }: StudioProp
             <button onClick={download} disabled={!cells} className={secondaryButton}>
               <Download className="w-4 h-4" /> PNG
             </button>
+            <button
+              onClick={exportFile}
+              disabled={!cells}
+              title="Save a card the player page at /bingo can open"
+              className={secondaryButton}
+            >
+              <Download className="w-4 h-4" /> {FILE_EXTENSION}
+            </button>
+            <select
+              value={encoding}
+              onChange={(e) => setEncoding(e.target.value as Encoding)}
+              title={ENCODINGS.find((e) => e.id === encoding)?.note}
+              className={`${inputClass} w-auto`}
+            >
+              {ENCODINGS.map((e) => <option key={e.id} value={e.id}>{e.label}</option>)}
+            </select>
             <button onClick={save} disabled={!cells || saving} className={secondaryButton}>
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               Save &amp; mark used
