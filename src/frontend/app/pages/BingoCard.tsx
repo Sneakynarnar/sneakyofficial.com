@@ -76,6 +76,9 @@ export default function BingoCardPage() {
   const baseRef = useRef<HTMLCanvasElement | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const [boxWidth, setBoxWidth] = useState(0);
+  const [viewHeight, setViewHeight] = useState(
+    typeof window === "undefined" ? 900 : window.innerHeight,
+  );
 
   const theme = CARD_THEMES.find((t) => t.id === themeId) ?? CARD_THEMES[0];
   const cells: BingoCell[] = useMemo(() => card?.cells ?? [], [card]);
@@ -159,6 +162,12 @@ export default function BingoCardPage() {
     return () => observer.disconnect();
   }, [card]);
 
+  useEffect(() => {
+    const onResize = () => setViewHeight(window.innerHeight);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
   // One loop for the life of the page: marks animate in, the counters pop, and
   // a finished line strikes itself through.
   useEffect(() => {
@@ -172,7 +181,14 @@ export default function BingoCardPage() {
         const layoutHeight = geometry.height + counterHeight;
         const width = boxWidth || geometry.width;
         const density = Math.min(window.devicePixelRatio || 1, 2);
-        const shrink = Math.min(1, width / geometry.width);
+        // Sized to fit the window, not the column: a card as tall as this one
+        // would otherwise run off the bottom of the screen and be scrolled
+        // rather than played.
+        const shrink = Math.min(
+          1,
+          width / geometry.width,
+          (viewHeight - 260) / layoutHeight,
+        );
         canvas.width = Math.round(geometry.width * shrink * density);
         canvas.height = Math.round(layoutHeight * shrink * density);
         canvas.style.width = `${Math.round(geometry.width * shrink)}px`;
@@ -190,7 +206,7 @@ export default function BingoCardPage() {
     };
     frame = requestAnimationFrame(render);
     return () => cancelAnimationFrame(frame);
-  }, [card, cells, session, geometry, counterHeight, style, boxWidth]);
+  }, [card, cells, session, geometry, counterHeight, style, boxWidth, viewHeight]);
 
   /* ---------------------------------------------------------------- */
   /*  Playing                                                          */
@@ -316,7 +332,7 @@ export default function BingoCardPage() {
         />
       </Helmet>
 
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <h1 className="text-3xl font-bold mb-1">Bingo card</h1>
         <p className="text-sm text-slate-400 mb-6">
           Everything here happens in your browser. The card never leaves your machine,
@@ -332,11 +348,11 @@ export default function BingoCardPage() {
         {!card ? (
           <DropZone onFile={open} />
         ) : (
-          <div className="grid lg:grid-cols-[1fr_340px] gap-6 items-start">
-            <div className="flex flex-col gap-3">
+          <div className="grid lg:grid-cols-[minmax(0,1fr)_340px] gap-6 items-start justify-center">
+            <div className="flex flex-col items-center gap-3">
               <div
                 ref={boxRef}
-                className="rounded-2xl border border-slate-700/50 bg-slate-900/40 p-3 flex justify-center"
+                className="w-full rounded-2xl border border-slate-700/50 bg-slate-900/40 p-3 flex justify-center"
               >
                 <canvas
                   ref={canvasRef}
@@ -345,7 +361,7 @@ export default function BingoCardPage() {
                 />
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center justify-center gap-2">
                 <span className="text-xs text-slate-400 mr-1">
                   {marked.size - cells.filter((c) => c.free).length} of {cells.length} crossed
                   {line ? " · line complete" : ""}
@@ -362,12 +378,6 @@ export default function BingoCardPage() {
                 </button>
               </div>
 
-              <Counters
-                counters={counters}
-                onBump={bump}
-                onAdd={addCounter}
-                onDrop={dropCounter}
-              />
             </div>
 
             <div className="flex flex-col gap-5">
@@ -506,6 +516,15 @@ export default function BingoCardPage() {
                   </select>
                 </div>
               </Panel>
+
+              <Panel title="Counters">
+                <Counters
+                  counters={counters}
+                  onBump={bump}
+                  onAdd={addCounter}
+                  onDrop={dropCounter}
+                />
+              </Panel>
             </div>
           </div>
         )}
@@ -557,8 +576,7 @@ function Counters({ counters, onBump, onAdd, onDrop }: {
   onDrop: (id: string) => void;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-700/50 bg-slate-900/40 p-3">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
         {counters.map((counter) => (
           <div key={counter.id} className="flex items-center gap-1 rounded-lg bg-slate-800/70 border border-slate-700/50 px-2 py-1">
             <span className="text-[11px] uppercase tracking-wide text-slate-400 mr-1">{counter.label}</span>
@@ -574,10 +592,9 @@ function Counters({ counters, onBump, onAdd, onDrop }: {
             </button>
           </div>
         ))}
-        <button onClick={onAdd} className={miniButton}>
-          <Plus className="w-3.5 h-3.5" /> Add a counter
-        </button>
-      </div>
+      <button onClick={onAdd} className={miniButton}>
+        <Plus className="w-3.5 h-3.5" /> Add a counter
+      </button>
     </div>
   );
 }
