@@ -5,7 +5,7 @@ import {
   Save, Search, ThumbsDown, ThumbsUp, Trash2, Undo2, X,
 } from "lucide-react";
 import {
-  CARD_THEMES, cardToPngBlob, drawBingoCard,
+  CARD_THEMES, cardToPngBlob, drawBingoCard, ensureCardFonts,
   type BingoCell, type DrawOptions,
 } from "./bingoCanvas";
 
@@ -245,7 +245,7 @@ function CardStudio({ suggestions, onSaved, flash }: StudioProps) {
   const [freeSpace, setFreeSpace] = useState(true);
   const [title, setTitle]         = useState("Splatoon Bingo");
   const [subtitle, setSubtitle]   = useState("");
-  const [accent, setAccent]       = useState("#7e32f0");
+  const [accent, setAccent]       = useState(CARD_THEMES[0].accent);
   const [themeId, setThemeId]     = useState(CARD_THEMES[0].id);
   const [credits, setCredits]     = useState(true);
   const [cells, setCells]         = useState<BingoCell[] | null>(null);
@@ -283,9 +283,15 @@ function CardStudio({ suggestions, onSaved, flash }: StudioProps) {
   ), [cells, rows, cols, title, subtitle, accent, theme, credits]);
 
   useEffect(() => {
-    if (canvasRef.current && drawOptions && previewWidth > 0) {
-      drawBingoCard(canvasRef.current, drawOptions, previewWidth);
-    }
+    let live = true;
+    // Line breaks are measured against the font in hand, so the first draw has
+    // to wait for the webfonts or it wraps as Arial and then jumps.
+    ensureCardFonts().then(() => {
+      if (live && canvasRef.current && drawOptions && previewWidth > 0) {
+        drawBingoCard(canvasRef.current, drawOptions, previewWidth);
+      }
+    });
+    return () => { live = false; };
   }, [drawOptions, previewWidth]);
 
   const draw = async () => {
@@ -390,7 +396,15 @@ function CardStudio({ suggestions, onSaved, flash }: StudioProps) {
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Theme">
-              <select value={themeId} onChange={(e) => setThemeId(e.target.value)} className={inputClass}>
+              <select
+                value={themeId}
+                onChange={(e) => {
+                  setThemeId(e.target.value);
+                  const picked = CARD_THEMES.find((t) => t.id === e.target.value);
+                  if (picked) setAccent(picked.accent);
+                }}
+                className={inputClass}
+              >
                 {CARD_THEMES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
               </select>
             </Field>
@@ -906,7 +920,7 @@ function SavedCards({ cards, onChanged, flash }: {
       cols: card.card_cols,
       title: card.name,
       subtitle: "",
-      accent: "#7e32f0",
+      accent: CARD_THEMES[0].accent,
       theme: CARD_THEMES[0],
       showCredits: true,
     });

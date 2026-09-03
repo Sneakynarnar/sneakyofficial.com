@@ -1,8 +1,14 @@
 /**
  * Canvas rendering for Splatoon Bingo cards.
  *
- * The card is drawn at print resolution and handed back as a PNG blob, so what
- * the admin previews on the page is byte for byte what downloads.
+ * The card is drawn in the game's own idiom: neon ink in Splatoon 3's palette
+ * splattered under and around the grid, with the squares sitting on top like
+ * turf that has just been rolled over. Every mark is drawn rather than loaded,
+ * so there is no artwork to ship and nothing of Nintendo's is redistributed.
+ *
+ * A download is rendered at print resolution; a preview is rendered at the size
+ * it is shown, since a browser shrinking a huge canvas into a small box is what
+ * makes text look chewed.
  */
 
 export interface BingoCell {
@@ -17,53 +23,301 @@ export interface CardTheme {
   label: string;
   background: string;
   cell: string;
-  cellAlt: string;
   text: string;
   muted: string;
-  grid: string;
   headerText: string;
+  /** Outline drawn round the header and FREE lettering. */
+  headerOutline: string;
+  /** The ink this theme suggests for the header and the free space. */
+  accent: string;
+  /** The ink it clashes with, thrown around the card behind the squares. */
+  ink: string;
 }
 
+// Splatoon 3 issues its ink in fixed pairs, one team against the other, and
+// these are the pairs' own values from the game's files by way of Inkipedia.
+// The accent is a starting point; the admin can pick any first ink they like.
 export const CARD_THEMES: CardTheme[] = [
   {
-    id: "paper",
-    label: "Paper",
-    background: "#ffffff",
+    id: "yellow-blue",
+    label: "Yellow vs Blue",
+    background: "#fbfbf2",
     cell: "#ffffff",
-    cellAlt: "#f4f6fb",
-    text: "#0f172a",
-    muted: "#64748b",
-    grid: "#0f172a",
+    text: "#141327",
+    muted: "#6b6a85",
     headerText: "#ffffff",
+    headerOutline: "#141327",
+    accent: "#3a0ccd",
+    ink: "#d0be08",
   },
   {
-    id: "ink",
-    label: "Ink",
-    background: "#0b1120",
-    cell: "#141d33",
-    cellAlt: "#101829",
-    text: "#f8fafc",
-    muted: "#94a3b8",
-    grid: "#334155",
+    id: "lime-purple",
+    label: "Lime vs Purple",
+    background: "#fcfdf4",
+    cell: "#ffffff",
+    text: "#1b1030",
+    muted: "#6f6489",
     headerText: "#ffffff",
+    headerOutline: "#1b1030",
+    accent: "#6325cd",
+    ink: "#becd41",
+  },
+  {
+    id: "turquoise-pink",
+    label: "Turquoise vs Pink (night)",
+    background: "#121026",
+    cell: "#1d1a38",
+    text: "#f7f5ff",
+    muted: "#9b95c4",
+    headerText: "#121026",
+    headerOutline: "#f7f5ff",
+    accent: "#1bbeab",
+    ink: "#c43a6e",
+  },
+  {
+    id: "paper",
+    label: "Plain paper",
+    background: "#ffffff",
+    cell: "#ffffff",
+    text: "#0f172a",
+    muted: "#64748b",
+    headerText: "#ffffff",
+    headerOutline: "#0f172a",
+    accent: "#6325cd",
+    ink: "#94c921",
   },
 ];
 
 // Everything below is in layout pixels. A download is backed at EXPORT_SCALE
-// times that so it holds up in print; a preview is drawn at the size it is
-// actually shown, because letting the browser shrink a huge canvas into a
-// small box is what makes the text look chewed.
+// times that so it holds up in print; a preview is backed at the screen's own
+// density instead.
 const EXPORT_SCALE = 2;
 
 const CELL_SIZE = 300;
-const PADDING = 44;
-const HEADER_HEIGHT = 170;
-const FOOTER_HEIGHT = 60;
+const PADDING = 56;
+const HEADER_HEIGHT = 190;
+const FOOTER_HEIGHT = 70;
 const CELL_PADDING = 22;
-const BORDER = 6;
+// How far the tile sits inside its square, leaving a rim of ink on show.
+const TILE_INSET = 15;
+const TAU = Math.PI * 2;
 
-const FONT_STACK =
-  '"Segoe UI", "Helvetica Neue", Helvetica, Roboto, Arial, sans-serif';
+// Titan One is the closest free stand-in for Splatoon's fat brush lettering,
+// with Fredoka carrying the squares, because a whole sentence set in a display
+// face is unreadable at square size. Both are fetched by ensureCardFonts.
+const DISPLAY_FONT =
+  '"Titan One", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif';
+const BODY_FONT =
+  '"Fredoka", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif';
+
+/**
+ * Wait for the card's webfonts, so the first draw is not laid out in Arial.
+ *
+ * Wrapping is measured against whatever font the canvas has at the time, so a
+ * draw that starts before the fonts arrive gets its line breaks wrong as well
+ * as its shapes. Failures are swallowed: the fallback stack still renders.
+ */
+export async function ensureCardFonts(): Promise<void> {
+  if (typeof document === "undefined" || !document.fonts) return;
+  try {
+    await Promise.all([
+      document.fonts.load('400 76px "Titan One"'),
+      document.fonts.load('600 34px "Fredoka"'),
+      document.fonts.load('500 21px "Fredoka"'),
+    ]);
+  } catch {
+    /* The fallback stack still renders. */
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Ink                                                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A tiny deterministic generator, so a card splatters the same way every time.
+ *
+ * The preview and the download are two separate renders; without a fixed seed
+ * they would disagree, and every redraw would shuffle the ink about.
+ */
+function seeded(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Turn a string into a seed, so each square splatters to suit its own text. */
+function hash(text: string): number {
+  let value = 0x811c9dc5;
+  for (let i = 0; i < text.length; i += 1) {
+    value ^= text.charCodeAt(i);
+    value = Math.imul(value, 0x01000193);
+  }
+  return value >>> 0;
+}
+
+interface SplatOptions {
+  /** How many lobes the blob has. Fewer reads as a bigger, lazier splat. */
+  points?: number;
+  /** How far the lobes stray from the radius, 0 to 1. */
+  wobble?: number;
+  /** Flying droplets thrown clear of the main blob. */
+  droplets?: number;
+  /** Squash, for ink that hit at an angle. */
+  squash?: number;
+  rotation?: number;
+}
+
+/**
+ * Trace one ink splat: a lopsided blob with a few long fingers and some
+ * droplets thrown clear of it.
+ *
+ * The fingers are what sell it. A blob with evenly wobbled edges reads as a
+ * cloud, whereas ink that has hit something spikes out in a couple of places
+ * and leaves flecks around itself.
+ */
+function splat(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number, radius: number,
+  rng: () => number,
+  options: SplatOptions = {},
+): void {
+  const {
+    points = 11, wobble = 0.55, droplets = 5,
+    squash = 1, rotation = rng() * TAU,
+  } = options;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rotation);
+  ctx.scale(1, squash);
+
+  // Evenly spaced lobes of similar length read as a cloud. Ink that has hit
+  // something has its lobes bunched unevenly and throws two or three long
+  // fingers, so both the angles and the lengths are knocked about.
+  const lobes: { angle: number; radius: number }[] = [];
+  const step = TAU / points;
+  for (let i = 0; i < points; i += 1) {
+    const finger = rng() < 0.34 ? 1.3 + rng() * 0.6 : 1;
+    lobes.push({
+      angle: i * step + (rng() - 0.5) * step * 0.9,
+      radius: radius * (1 - wobble / 2 + rng() * wobble) * finger,
+    });
+  }
+
+  // Curve through the midpoints between neighbours: the lobe tips become
+  // control points, which rounds the blob off without flattening the fingers.
+  const at = (i: number) => {
+    const lobe = lobes[((i % points) + points) % points];
+    return { x: Math.cos(lobe.angle) * lobe.radius, y: Math.sin(lobe.angle) * lobe.radius };
+  };
+
+  ctx.beginPath();
+  const first = at(0);
+  const last = at(points - 1);
+  ctx.moveTo((last.x + first.x) / 2, (last.y + first.y) / 2);
+  for (let i = 0; i < points; i += 1) {
+    const current = at(i);
+    const next = at(i + 1);
+    ctx.quadraticCurveTo(
+      current.x, current.y,
+      (current.x + next.x) / 2, (current.y + next.y) / 2,
+    );
+  }
+  ctx.closePath();
+  ctx.fill();
+
+  for (let i = 0; i < droplets; i += 1) {
+    const angle = rng() * TAU;
+    const distance = radius * (1.05 + rng() * 0.85);
+    const size = radius * (0.04 + rng() * 0.11);
+    ctx.beginPath();
+    ctx.ellipse(
+      Math.cos(angle) * distance, Math.sin(angle) * distance,
+      size, size * (0.6 + rng() * 0.6), angle, 0, TAU,
+    );
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+/**
+ * Draw a drip running down from a point: a fat head, a narrowing tail and a
+ * bead about to fall off the end of it.
+ */
+function drip(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, width: number, length: number,
+  rng: () => number,
+): void {
+  const waist = width * (0.3 + rng() * 0.25);
+  ctx.beginPath();
+  ctx.moveTo(x - width / 2, y);
+  ctx.bezierCurveTo(
+    x - width / 2, y + length * 0.55,
+    x - waist, y + length * 0.7,
+    x, y + length,
+  );
+  ctx.bezierCurveTo(
+    x + waist, y + length * 0.7,
+    x + width / 2, y + length * 0.55,
+    x + width / 2, y,
+  );
+  ctx.closePath();
+  ctx.fill();
+
+  const bead = waist * (0.6 + rng() * 0.5);
+  ctx.beginPath();
+  ctx.ellipse(x, y + length + bead * 1.6, bead, bead * 1.25, 0, 0, TAU);
+  ctx.fill();
+}
+
+/**
+ * How strongly to lay an ink down so it reads on the paper.
+ *
+ * Splatoon's inks run from near black blue to acid yellow. At one opacity the
+ * yellow vanishes into a light card and the blue swamps it, so the weight is
+ * set from the colour's own brightness against the paper.
+ */
+function inkAlpha(colour: string, background: string, base: number): number {
+  const contrast = Math.abs(luminance(colour) - luminance(background));
+  return base * (0.55 + 1.35 * (1 - Math.min(1, contrast * 1.6)));
+}
+
+/** Rough perceived brightness of a #rrggbb colour, 0 to 1. */
+function luminance(colour: string): number {
+  const hex = colour.replace("#", "");
+  const full = hex.length === 3 ? hex.split("").map((c) => c + c).join("") : hex;
+  const value = parseInt(full, 16);
+  if (Number.isNaN(value)) return 0.5;
+  const r = (value >> 16) & 255, g = (value >> 8) & 255, b = value & 255;
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+}
+
+/** Paint a splat in one colour at a given opacity. */
+function inkSplat(
+  ctx: CanvasRenderingContext2D,
+  colour: string, alpha: number,
+  cx: number, cy: number, radius: number,
+  rng: () => number,
+  options: SplatOptions = {},
+): void {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = colour;
+  splat(ctx, cx, cy, radius, rng, options);
+  ctx.restore();
+}
+
+/* ------------------------------------------------------------------ */
+/*  Text                                                               */
+/* ------------------------------------------------------------------ */
 
 /** Text sits on whole pixels; half a pixel is what makes a glyph look furry. */
 function snap(value: number): number {
@@ -126,19 +380,35 @@ function fitText(
   text: string,
   maxWidth: number,
   maxHeight: number,
+  font: string,
   weight: string,
   maxFont: number,
   minFont: number,
 ): WrappedText {
   for (let size = maxFont; size >= minFont; size -= 1) {
-    ctx.font = `${weight} ${size}px ${FONT_STACK}`;
+    ctx.font = `${weight} ${size}px ${font}`;
     const lines = wrap(ctx, text, maxWidth);
     if (lines.length * size * 1.24 <= maxHeight) return { lines, fontSize: size };
   }
-  ctx.font = `${weight} ${minFont}px ${FONT_STACK}`;
+  ctx.font = `${weight} ${minFont}px ${font}`;
   return { lines: wrap(ctx, text, maxWidth), fontSize: minFont };
 }
 
+/** Draw text with an ink outline, the way the game sets its own lettering. */
+function outlined(
+  ctx: CanvasRenderingContext2D,
+  line: string, x: number, y: number,
+  fill: string, outline: string, thickness: number,
+): void {
+  ctx.lineJoin = "round";
+  ctx.lineWidth = thickness;
+  ctx.strokeStyle = outline;
+  ctx.strokeText(line, x, y);
+  ctx.fillStyle = fill;
+  ctx.fillText(line, x, y);
+}
+
+/** Trace a rounded rectangle, for the tile a square's text sits on. */
 function roundedRect(
   ctx: CanvasRenderingContext2D,
   x: number, y: number, w: number, h: number, r: number,
@@ -151,6 +421,10 @@ function roundedRect(
   ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
 }
+
+/* ------------------------------------------------------------------ */
+/*  The card                                                           */
+/* ------------------------------------------------------------------ */
 
 export interface DrawOptions {
   cells: BingoCell[];
@@ -203,90 +477,180 @@ export function drawBingoCard(
   ctx.fillStyle = theme.background;
   ctx.fillRect(0, 0, width, height);
 
-  // Header band
-  roundedRect(ctx, PADDING, PADDING, gridWidth, HEADER_HEIGHT - 34, 18);
-  ctx.fillStyle = accent;
-  ctx.fill();
+  const gridTop = PADDING + HEADER_HEIGHT;
+  const inks = [accent, theme.ink];
 
-  const headerText = title.trim() || "SPLATOON BINGO";
-  const headerBox = { w: gridWidth - 60, h: HEADER_HEIGHT - 34 - 40 };
-  const header = fitText(ctx, headerText.toUpperCase(), headerBox.w, headerBox.h, "800", 76, 26);
-  ctx.fillStyle = theme.headerText;
-  ctx.textAlign = "center";
-  const headerLineHeight = header.fontSize * 1.18;
-  const headerStart = PADDING + (HEADER_HEIGHT - 34 - header.lines.length * headerLineHeight) / 2;
-  header.lines.forEach((line, i) => {
-    ctx.fillText(line, snap(PADDING + gridWidth / 2), snap(headerStart + i * headerLineHeight));
+  // Ink under everything: big lazy splats in both team colours, faint enough
+  // that the squares still read, seeded on the card so it never reshuffles.
+  const backdrop = seeded(hash(`${title}|${rows}x${cols}|${subtitle}`));
+  for (let i = 0; i < 9; i += 1) {
+    inkSplat(
+      ctx, inks[i % 2], inkAlpha(inks[i % 2], theme.background, 0.14),
+      backdrop() * width, backdrop() * height,
+      CELL_SIZE * (0.3 + backdrop() * 0.55), backdrop,
+      { points: 10, wobble: 0.7, droplets: 8, squash: 0.55 + backdrop() * 0.7 },
+    );
+  }
+  // Two roller sweeps across the paper, because a turf war is not all splats.
+  for (let i = 0; i < 2; i += 1) {
+    inkSplat(
+      ctx, inks[i % 2], inkAlpha(inks[i % 2], theme.background, 0.12),
+      backdrop() * width, PADDING + backdrop() * (height - PADDING),
+      CELL_SIZE * (0.9 + backdrop() * 0.5), backdrop,
+      {
+        points: 13, wobble: 0.35, droplets: 10,
+        squash: 0.16 + backdrop() * 0.1,
+        rotation: (backdrop() - 0.5) * 1.2,
+      },
+    );
+  }
+
+  // Header: a broad splat of ink with the title struck across it.
+  const bandHeight = HEADER_HEIGHT - 46;
+  const bandCentre = { x: PADDING + gridWidth / 2, y: PADDING + bandHeight / 2 };
+  const band = seeded(hash(title || "bingo"));
+  ctx.save();
+  ctx.fillStyle = accent;
+  splat(ctx, bandCentre.x, bandCentre.y, gridWidth / 2, band, {
+    points: 21, wobble: 0.5, droplets: 12,
+    squash: (bandHeight / gridWidth) * 1.85, rotation: 0,
   });
+  // Ink running off the underside of the band, towards the grid.
+  for (let i = 0; i < 5; i += 1) {
+    const at = PADDING + gridWidth * (0.08 + band() * 0.84);
+    drip(ctx, at, bandCentre.y + bandHeight * 0.3,
+         18 + band() * 26, 20 + band() * 46, band);
+  }
+  ctx.restore();
+
+  const headerText = (title.trim() || "SPLATOON BINGO").toUpperCase();
+  const header = fitText(
+    ctx, headerText, gridWidth - 140, bandHeight - 46, DISPLAY_FONT, "400", 84, 28,
+  );
+  ctx.textAlign = "center";
+  const headerLineHeight = header.fontSize * 1.14;
+  const headerStart = PADDING + (bandHeight - header.lines.length * headerLineHeight) / 2;
+  ctx.save();
+  // The game never sets a title straight, so neither does this.
+  ctx.translate(bandCentre.x, bandCentre.y);
+  ctx.rotate(-0.022);
+  ctx.translate(-bandCentre.x, -bandCentre.y);
+  header.lines.forEach((line, i) => {
+    outlined(
+      ctx, line, snap(bandCentre.x), snap(headerStart + i * headerLineHeight),
+      theme.headerText, theme.headerOutline, Math.max(6, header.fontSize * 0.14),
+    );
+  });
+  ctx.restore();
 
   // Grid
-  const gridTop = PADDING + HEADER_HEIGHT;
   const centreIndex = Math.floor((rows * cols) / 2);
 
-  cells.forEach((cell, index) => {
+  // Ink first, every square of it, then the tiles: a splat spreads past its own
+  // square, and drawing each square complete in turn would let one square's ink
+  // land on top of its neighbour's text.
+  const geometry = (index: number) => {
     const row = Math.floor(index / cols);
     const col = index % cols;
     const x = PADDING + col * CELL_SIZE;
     const y = gridTop + row * CELL_SIZE;
-    const isFree = cell.free || (cell.id === null && index === centreIndex);
+    return { row, col, x, y, centreX: x + CELL_SIZE / 2, centreY: y + CELL_SIZE / 2 };
+  };
+  const isFreeSquare = (cell: BingoCell, index: number) =>
+    cell.free || (cell.id === null && index === centreIndex);
 
-    ctx.fillStyle = isFree ? accent : (row + col) % 2 === 0 ? theme.cell : theme.cellAlt;
-    ctx.fillRect(x, y, CELL_SIZE, CELL_SIZE);
+  cells.forEach((cell, index) => {
+    const { row, col, centreX, centreY } = geometry(index);
+    const rng = seeded(hash(`${index}|${cell.text}`));
+    const free = isFreeSquare(cell, index);
 
-    ctx.strokeStyle = theme.grid;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x + 1, y + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+    // The two inks alternate like a chequerboard, laid at full strength: the
+    // tile, not the paper, is what has to carry the text.
+    ctx.save();
+    ctx.fillStyle = free ? accent : inks[(row + col) % 2];
+    splat(ctx, centreX, centreY, CELL_SIZE * (free ? 0.5 : 0.46), rng, {
+      points: 13, wobble: 0.42, droplets: 6,
+    });
+    ctx.restore();
+  });
+
+  cells.forEach((cell, index) => {
+    const { x, y, centreX, centreY } = geometry(index);
+    const rng = seeded(hash(`${index}|${cell.text}`));
+    const isFree = isFreeSquare(cell, index);
 
     const credit = showCredits && !isFree && cell.display_name ? cell.display_name : "";
-    const creditSpace = credit ? 34 : 0;
-    const boxWidth = CELL_SIZE - CELL_PADDING * 2;
-    const boxHeight = CELL_SIZE - CELL_PADDING * 2 - creditSpace;
+    const creditSpace = credit ? 38 : 0;
+    const boxWidth = CELL_SIZE - CELL_PADDING * 2 - TILE_INSET * 2;
+    const boxHeight = CELL_SIZE - CELL_PADDING * 2 - TILE_INSET * 2 - creditSpace;
 
-    const body = fitText(
-      ctx,
-      isFree ? "FREE" : cell.text,
-      boxWidth,
-      boxHeight,
-      isFree ? "800" : "600",
-      isFree ? 72 : 36,
-      isFree ? 40 : 18,
-    );
+    const body = isFree
+      ? fitText(ctx, "FREE", CELL_SIZE - CELL_PADDING * 2, CELL_SIZE - CELL_PADDING * 2,
+                DISPLAY_FONT, "400", 82, 40)
+      : fitText(ctx, cell.text, boxWidth, boxHeight, BODY_FONT, "600", 34, 17);
 
-    ctx.fillStyle = isFree ? theme.headerText : theme.text;
+    ctx.save();
+    // Tiles land a degree or two out of true, the way a sticker would.
+    ctx.translate(centreX, centreY);
+    ctx.rotate((rng() - 0.5) * 0.05);
+    ctx.translate(-centreX, -centreY);
     ctx.textAlign = "center";
+
+    if (!isFree) {
+      roundedRect(
+        ctx,
+        x + TILE_INSET, y + TILE_INSET,
+        CELL_SIZE - TILE_INSET * 2, CELL_SIZE - TILE_INSET * 2,
+        18,
+      );
+      ctx.fillStyle = theme.cell;
+      ctx.fill();
+    }
+
     const lineHeight = body.fontSize * 1.24;
     const blockHeight = body.lines.length * lineHeight;
-    const startY = y + CELL_PADDING + (boxHeight - blockHeight) / 2;
+    const top = y + TILE_INSET + CELL_PADDING;
+    const startY = isFree
+      ? centreY - blockHeight / 2
+      : top + (boxHeight - blockHeight) / 2;
     body.lines.forEach((line, i) => {
-      ctx.fillText(line, snap(x + CELL_SIZE / 2), snap(startY + i * lineHeight));
+      const at = { x: snap(centreX), y: snap(startY + i * lineHeight) };
+      if (isFree) {
+        outlined(ctx, line, at.x, at.y, theme.headerText, theme.headerOutline,
+                 body.fontSize * 0.16);
+      } else {
+        ctx.fillStyle = theme.text;
+        ctx.fillText(line, at.x, at.y);
+      }
     });
 
     if (credit) {
-      ctx.font = `500 20px ${FONT_STACK}`;
+      ctx.font = `500 21px ${BODY_FONT}`;
       ctx.fillStyle = theme.muted;
       const label = `— ${credit}`;
       const trimmed = ctx.measureText(label).width > boxWidth
         ? `${label.slice(0, 24)}…`
         : label;
-      ctx.fillText(trimmed, snap(x + CELL_SIZE / 2), snap(y + CELL_SIZE - CELL_PADDING - 22));
+      ctx.fillText(trimmed, snap(centreX),
+                   snap(y + CELL_SIZE - TILE_INSET - CELL_PADDING - 20));
     }
+    ctx.restore();
   });
 
-  // Outer frame, drawn last so it sits over the cell borders
-  ctx.strokeStyle = theme.grid;
-  ctx.lineWidth = BORDER;
-  ctx.strokeRect(PADDING, gridTop, gridWidth, gridHeight);
-
   if (subtitle) {
-    ctx.font = `500 26px ${FONT_STACK}`;
-    ctx.fillStyle = theme.muted;
+    ctx.font = `500 28px ${BODY_FONT}`;
     ctx.textAlign = "center";
-    ctx.fillText(subtitle, snap(PADDING + gridWidth / 2), snap(gridTop + gridHeight + 20));
+    outlined(
+      ctx, subtitle,
+      snap(PADDING + gridWidth / 2), snap(gridTop + gridHeight + 24),
+      theme.muted, theme.background, 8,
+    );
   }
 }
 
 /** Render the card and hand back a PNG blob ready to download. */
-export function cardToPngBlob(options: DrawOptions): Promise<Blob | null> {
+export async function cardToPngBlob(options: DrawOptions): Promise<Blob | null> {
+  await ensureCardFonts();
   const canvas = document.createElement("canvas");
   drawBingoCard(canvas, options);
   return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
