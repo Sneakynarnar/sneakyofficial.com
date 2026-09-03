@@ -295,7 +295,7 @@ function CardStudio({ suggestions, onSaved, flash }: StudioProps) {
     // to wait for the webfonts or it wraps as Arial and then jumps.
     ensureCardFonts().then(() => {
       if (live && canvasRef.current && drawOptions && previewWidth > 0) {
-        drawBingoCard(canvasRef.current, drawOptions, previewWidth);
+        drawBingoCard(canvasRef.current, drawOptions, { displayWidth: previewWidth });
       }
     });
     return () => { live = false; };

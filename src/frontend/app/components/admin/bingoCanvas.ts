@@ -57,9 +57,25 @@ export const CARD_THEMES: CardTheme[] = [
 ];
 
 // Everything below is in layout pixels. A download is backed at EXPORT_SCALE
-// times that so it holds up in print; a preview is backed at the screen's own
-// density instead.
-const EXPORT_SCALE = 2;
+// times that so it holds up blown up on a stream or printed; a preview is
+// backed at the screen's own density instead.
+const EXPORT_SCALE = 4;
+
+// Browsers refuse to allocate a canvas past a certain size, and a refusal is
+// silent: the canvas comes back blank. A 5x5 at four times size is about 48
+// megapixels, so the cap only bites on the largest grids, which fall back to
+// whatever multiple does fit.
+const MAX_EXPORT_PIXELS = 60_000_000;
+const MAX_EXPORT_DIMENSION = 12_000;
+
+/** The largest whole-ish multiple of the layout size a browser will allocate. */
+function exportScale(width: number, height: number): number {
+  return Math.min(
+    EXPORT_SCALE,
+    Math.sqrt(MAX_EXPORT_PIXELS / (width * height)),
+    MAX_EXPORT_DIMENSION / Math.max(width, height),
+  );
+}
 
 const CELL_SIZE = 300;
 const PADDING = 56;
@@ -422,16 +438,19 @@ export interface DrawOptions {
 /**
  * Draw a finished bingo card onto a canvas, sizing the canvas to fit.
  *
- * @param displayWidth CSS pixels the canvas will occupy on the page. Given one,
- *   the card is drawn to that size at the screen's own pixel density, so every
- *   glyph is rasterised rather than resampled. Left out, the card is drawn at
- *   full size for export.
+ * @param view How the canvas is destined to be seen. `displayWidth` is the CSS
+ *   pixels it will occupy on the page: given one, the card is drawn to that
+ *   size at the screen's own pixel density, so every glyph is rasterised rather
+ *   than resampled. `scale` overrides the multiple of the layout size a
+ *   download is backed at, for retrying smaller when a canvas is refused.
+ *   Given neither, the card is drawn at full export size.
  */
 export function drawBingoCard(
   canvas: HTMLCanvasElement,
   options: DrawOptions,
-  displayWidth?: number,
+  view: { displayWidth?: number; scale?: number } = {},
 ): void {
+  const { displayWidth, scale: forced } = view;
   const {
     cells, rows, cols, title, subtitle, accent, secondary, freeText, theme, showCredits,
   } = options;
@@ -443,7 +462,9 @@ export function drawBingoCard(
 
   // How much of a layout pixel one backing pixel covers.
   const shrink = displayWidth ? Math.min(1, displayWidth / width) : 1;
-  const density = displayWidth ? Math.min(window.devicePixelRatio || 1, 2) : EXPORT_SCALE;
+  const density = displayWidth
+    ? Math.min(window.devicePixelRatio || 1, 2)
+    : forced ?? exportScale(width, height);
   const scale = shrink * density;
 
   canvas.width = Math.round(width * scale);
@@ -636,7 +657,31 @@ export function drawBingoCard(
 /** Render the card and hand back a PNG blob ready to download. */
 export async function cardToPngBlob(options: DrawOptions): Promise<Blob | null> {
   await ensureCardFonts();
-  const canvas = document.createElement("canvas");
-  drawBingoCard(canvas, options);
-  return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+
+  const gridWidth = options.cols * CELL_SIZE;
+  const width = gridWidth + PADDING * 2;
+  const height = options.rows * CELL_SIZE + PADDING * 2 + HEADER_HEIGHT
+    + (options.subtitle ? FOOTER_HEIGHT : 0);
+
+  // Browsers differ on how big a canvas they will hand over, and one that is
+  // too big fails quietly rather than throwing: you get a blank image. So the
+  // biggest size is tried first and each failure halves it, down to a size
+  // nothing refuses.
+  let scale = exportScale(width, height);
+  for (;;) {
+    const canvas = document.createElement("canvas");
+    try {
+      drawBingoCard(canvas, options, { scale });
+      const blob = await new Promise<Blob | null>(
+        (resolve) => canvas.toBlob(resolve, "image/png"),
+      );
+      // One opaque pixel is enough to know the canvas was really painted.
+      const painted = canvas.getContext("2d")?.getImageData(0, 0, 1, 1).data[3];
+      if (blob && painted) return blob;
+    } catch {
+      /* Refused outright, which the smaller size below may not be. */
+    }
+    if (scale <= 1) return null;
+    scale = Math.max(1, scale / 2);
+  }
 }
