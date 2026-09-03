@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import {
-  Check, Dices, Download, EyeOff, Grid3x3, Loader2, Pencil, RefreshCw, Save,
-  Search, ThumbsDown, ThumbsUp, Trash2, Undo2, X,
+  Check, Dices, Download, EyeOff, Grid3x3, Loader2, Pencil, Plus, RefreshCw,
+  Save, Search, ThumbsDown, ThumbsUp, Trash2, Undo2, X,
 } from "lucide-react";
 import {
   CARD_THEMES, cardToPngBlob, drawBingoCard,
@@ -30,6 +30,8 @@ interface Suggestion {
   used: boolean;
   used_card_id: number | null;
   used_card_name: string | null;
+  /** Typed into this page rather than posted in the Discord channel. */
+  manual: boolean;
   created_at: string | null;
 }
 
@@ -513,6 +515,8 @@ function SuggestionPool({ suggestions, categories, onChanged, flash }: PoolProps
         consumed by a saved card; release one to put it back in the pool.
       </p>
 
+      <AddSuggestions onAdded={onChanged} flash={flash} />
+
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <div className="flex gap-1 p-1 rounded-lg bg-slate-800/60 border border-slate-700/50">
           {FILTERS.map((f) => (
@@ -696,6 +700,7 @@ function SuggestionPool({ suggestions, categories, onChanged, flash }: PoolProps
                 )}
                 <p className="text-[11px] text-slate-500 mt-0.5 flex flex-wrap items-center gap-x-2">
                   <span>{s.display_name}</span>
+                  {s.manual && <span className="text-slate-400">added here</span>}
                   <StatusBadge status={s.status} />
                   {s.excluded && <span className="text-amber-400">excluded</span>}
                   {s.used && (
@@ -756,6 +761,99 @@ function SuggestionPool({ suggestions, categories, onChanged, flash }: PoolProps
         </ul>
       )}
     </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Adding your own                                                    */
+/* ------------------------------------------------------------------ */
+
+function AddSuggestions({ onAdded, flash }: {
+  onAdded: () => void;
+  flash: (text: string, ok: boolean) => void;
+}) {
+  const [open, setOpen]       = useState(false);
+  const [text, setText]       = useState("");
+  const [author, setAuthor]   = useState("");
+  const [approve, setApprove] = useState(true);
+  const [busy, setBusy]       = useState(false);
+
+  const lines = text.split("\n").filter((line) => line.trim()).length;
+
+  const submit = async () => {
+    setBusy(true);
+    try {
+      const { data } = await axios.post(
+        `${API_URL}/api/bingo/admin/add`,
+        { text, author, approved: approve, guild_id: GUILD_ID || null },
+        { withCredentials: true },
+      );
+      flash(data.message ?? "Added.", data.ok !== false);
+      if (data.ok !== false) { setText(""); onAdded(); }
+    } catch (err) {
+      const message = axios.isAxiosError(err) ? err.response?.data?.message : null;
+      flash(message ?? "Couldn't add those.", false);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className={`${miniButton} mb-3`}>
+        <Plus className="w-3.5 h-3.5" /> Add my own suggestions
+      </button>
+    );
+  }
+
+  return (
+    <div className="mb-3 p-3 rounded-lg bg-slate-900/40 border border-slate-700/50">
+      <p className="text-xs text-slate-400 mb-2">
+        One per line. Numbered or bulleted lists work too, and anything already in
+        the pool word for word is skipped.
+      </p>
+
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        rows={5}
+        autoFocus
+        placeholder={"Splat a Booyah Bomb out of the air\nWin a match without dying"}
+        className={`${inputClass} resize-y font-mono text-[13px]`}
+      />
+
+      <div className="flex flex-wrap items-center gap-3 mt-2">
+        <input
+          value={author}
+          onChange={(e) => setAuthor(e.target.value)}
+          maxLength={100}
+          placeholder="Credit as (defaults to you)"
+          className={`${inputClass} flex-1 min-w-[200px]`}
+        />
+        <label className="flex items-center gap-2 text-sm text-slate-300">
+          <input
+            type="checkbox"
+            checked={approve}
+            onChange={(e) => setApprove(e.target.checked)}
+            className="accent-indigo-500"
+          />
+          Approve straight away
+        </label>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 mt-2">
+        <button disabled={busy || lines === 0} onClick={submit} className={primaryButton}>
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+          Add {lines || ""} {lines === 1 ? "suggestion" : "suggestions"}
+        </button>
+        <button onClick={() => { setOpen(false); setText(""); }} className={miniButton}>
+          <X className="w-3.5 h-3.5" /> Cancel
+        </button>
+        <span className="text-[11px] text-slate-500">
+          These sit outside the ten-per-person limit.
+        </span>
+      </div>
+    </div>
   );
 }
 

@@ -49,6 +49,11 @@ export const CARD_THEMES: CardTheme[] = [
   },
 ];
 
+// Everything below is in layout pixels; the canvas is backed at SCALE times
+// that, so text is rasterised with enough detail to survive both the shrunken
+// on-page preview and a full size print.
+const SCALE = 2;
+
 const CELL_SIZE = 300;
 const PADDING = 44;
 const HEADER_HEIGHT = 170;
@@ -56,7 +61,13 @@ const FOOTER_HEIGHT = 60;
 const CELL_PADDING = 22;
 const BORDER = 6;
 
-const FONT_STACK = '"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+const FONT_STACK =
+  '"Segoe UI", "Helvetica Neue", Helvetica, Roboto, Arial, sans-serif';
+
+/** Text sits on whole pixels; half a pixel is what makes a glyph look furry. */
+function snap(value: number): number {
+  return Math.round(value);
+}
 
 interface WrappedText {
   lines: string[];
@@ -160,12 +171,17 @@ export function drawBingoCard(canvas: HTMLCanvasElement, options: DrawOptions): 
   const width = gridWidth + PADDING * 2;
   const height = gridHeight + PADDING * 2 + HEADER_HEIGHT + (subtitle ? FOOTER_HEIGHT : 0);
 
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = width * SCALE;
+  canvas.height = height * SCALE;
+  // The preview is laid out at the design size and downscaled by the browser
+  // only when the column is narrower, so it never renders below the backing
+  // resolution.
+  canvas.style.width = `${width}px`;
 
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
+  ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
   ctx.textBaseline = "top";
   ctx.fillStyle = theme.background;
   ctx.fillRect(0, 0, width, height);
@@ -183,7 +199,7 @@ export function drawBingoCard(canvas: HTMLCanvasElement, options: DrawOptions): 
   const headerLineHeight = header.fontSize * 1.18;
   const headerStart = PADDING + (HEADER_HEIGHT - 34 - header.lines.length * headerLineHeight) / 2;
   header.lines.forEach((line, i) => {
-    ctx.fillText(line, PADDING + gridWidth / 2, headerStart + i * headerLineHeight);
+    ctx.fillText(line, snap(PADDING + gridWidth / 2), snap(headerStart + i * headerLineHeight));
   });
 
   // Grid
@@ -215,8 +231,8 @@ export function drawBingoCard(canvas: HTMLCanvasElement, options: DrawOptions): 
       boxWidth,
       boxHeight,
       isFree ? "800" : "600",
-      isFree ? 72 : 34,
-      isFree ? 40 : 15,
+      isFree ? 72 : 36,
+      isFree ? 40 : 18,
     );
 
     ctx.fillStyle = isFree ? theme.headerText : theme.text;
@@ -225,7 +241,7 @@ export function drawBingoCard(canvas: HTMLCanvasElement, options: DrawOptions): 
     const blockHeight = body.lines.length * lineHeight;
     const startY = y + CELL_PADDING + (boxHeight - blockHeight) / 2;
     body.lines.forEach((line, i) => {
-      ctx.fillText(line, x + CELL_SIZE / 2, startY + i * lineHeight);
+      ctx.fillText(line, snap(x + CELL_SIZE / 2), snap(startY + i * lineHeight));
     });
 
     if (credit) {
@@ -235,7 +251,7 @@ export function drawBingoCard(canvas: HTMLCanvasElement, options: DrawOptions): 
       const trimmed = ctx.measureText(label).width > boxWidth
         ? `${label.slice(0, 24)}…`
         : label;
-      ctx.fillText(trimmed, x + CELL_SIZE / 2, y + CELL_SIZE - CELL_PADDING - 22);
+      ctx.fillText(trimmed, snap(x + CELL_SIZE / 2), snap(y + CELL_SIZE - CELL_PADDING - 22));
     }
   });
 
@@ -248,7 +264,7 @@ export function drawBingoCard(canvas: HTMLCanvasElement, options: DrawOptions): 
     ctx.font = `500 26px ${FONT_STACK}`;
     ctx.fillStyle = theme.muted;
     ctx.textAlign = "center";
-    ctx.fillText(subtitle, PADDING + gridWidth / 2, gridTop + gridHeight + 20);
+    ctx.fillText(subtitle, snap(PADDING + gridWidth / 2), snap(gridTop + gridHeight + 20));
   }
 }
 

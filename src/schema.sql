@@ -303,8 +303,10 @@ INDEX idx_play_date (play_date)
 -- Splatoon Bingo
 -- ---------------------------------------------------------------------------
 
--- One row per accepted suggestion. A member may contribute up to three, all
--- carried on a single Discord message.
+-- One row per accepted suggestion. A member may contribute up to ten, spread
+-- over as many Discord messages as they like. A message_id of zero or less
+-- means the suggestion was typed into the admin dashboard instead, so nothing
+-- should go looking for a Discord message behind it.
 CREATE TABLE IF NOT EXISTS bingo_suggestions (
   id INT AUTO_INCREMENT PRIMARY KEY,
   guild_id BIGINT NOT NULL,

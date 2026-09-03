@@ -11,7 +11,8 @@ from ..util import overlay_settings as _ov
 from ..util import splatdle_presence as _presence
 from . import splatdle_history as _history
 from ..tournament import TournamentManager
-from ..bingo import BingoManager, REJECT_CATEGORIES, notifier as bingo_notifier
+from ..bingo import (BingoManager, REJECT_CATEGORIES, parse_submission,
+                     notifier as bingo_notifier)
 from ..util.config import global_config
 import interactions
 import logging
@@ -1394,6 +1395,47 @@ class SneakyApi:
             })
         except Exception:
             logger.exception("bingo_admin_get failed")
+            return web.json_response({"error": "Server error"}, status=500)
+
+    @verify_tournament_admin
+    async def bingo_admin_add(self, request: Request, admin_id: int) -> web.Response:
+        """Add the admin's own suggestions to the pool by hand.
+
+        The text is parsed the same way a Discord submission is, so a numbered
+        or bulleted list pasted in adds one square per line.
+        """
+        try:
+            body = await request.json()
+            guild_id = body.get("guild_id")
+            ok, error, suggestions = parse_submission(str(body.get("text", "")))
+            if not ok:
+                return web.json_response(
+                    {"ok": False, "message": "Put each suggestion on its own line."},
+                    status=400,
+                )
+
+            author = " ".join(str(body.get("author", "")).split())
+            if not author:
+                user = self.bot.get_user(admin_id)
+                if user is None:
+                    try:
+                        user = await self.bot.fetch_user(admin_id)
+                    except Exception:
+                        user = None
+                author = (user.display_name if user else None) or "Admin"
+
+            ok, msg, added = await BingoManager.add_manual_suggestions(
+                guild_id=int(guild_id) if guild_id else 0,
+                discord_id=admin_id,
+                display_name=author,
+                suggestions=suggestions,
+                approved=bool(body.get("approved", True)),
+            )
+            return web.json_response(
+                {"ok": ok, "message": msg, "added": added}, status=200 if ok else 400
+            )
+        except Exception:
+            logger.exception("bingo_admin_add failed")
             return web.json_response({"error": "Server error"}, status=500)
 
     @verify_tournament_admin

@@ -255,6 +255,8 @@ class WebServer:
         self.app.router.add_get(
             "/api/bingo/admin", self.sneaky_api.bingo_admin_get)
         self.app.router.add_post(
+            "/api/bingo/admin/add", self.sneaky_api.bingo_admin_add)
+        self.app.router.add_post(
             "/api/bingo/admin/exclude", self.sneaky_api.bingo_admin_exclude)
         self.app.router.add_post(
             "/api/bingo/admin/used", self.sneaky_api.bingo_admin_used)

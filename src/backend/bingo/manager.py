@@ -304,7 +304,8 @@ class BingoManager:
         async with DBContextManager(use_dict=True) as cur:
             await cur.execute(
                 """SELECT COUNT(*) AS used FROM bingo_suggestions
-                   WHERE guild_id = %s AND discord_id = %s AND status != 'rejected'""",
+                   WHERE guild_id = %s AND discord_id = %s AND status != 'rejected'
+                     AND message_id > 0""",
                 (guild_id, discord_id)
             )
             row = await cur.fetchone() or {}
@@ -375,6 +376,87 @@ class BingoManager:
         left = remaining - count
         return True, f"Saved {count} suggestion{'s' if count != 1 else ''}.", left
 
+    @staticmethod
+    async def add_manual_suggestions(guild_id: int, discord_id: int, display_name: str,
+                                     suggestions: list[str],
+                                     approved: bool = True) -> tuple[bool, str, int]:
+        """Store suggestions typed into the dashboard rather than posted in Discord.
+
+        These are the admin's own ideas, added to fill out a thin pool, so they
+        sit outside the ten-per-person allowance and go in approved by default.
+        They are stored against a negative message ID: there is no Discord
+        message behind them, and nothing that talks to Discord should ever try
+        to fetch one.
+
+        Anything already in the pool word for word is skipped rather than
+        refused, so pasting a list twice does not duplicate half of it.
+
+        Args:
+            guild_id: Guild the pool belongs to.
+            discord_id: Who the squares are credited to.
+            display_name: The name printed on the square.
+            suggestions: The suggestions, in order.
+            approved: Whether they go straight into the drawable pool.
+
+        Returns:
+            (ok, message, added).
+        """
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for raw in suggestions:
+            text = _clean(raw)
+            ok, reason = check_free_text(text, MIN_LENGTH, MAX_LENGTH, "Each suggestion")
+            if not ok:
+                return False, f"{reason} Nothing was saved.", 0
+            key = text.lower()
+            if key in seen:
+                return False, "Two of those are the same. Nothing was saved.", 0
+            seen.add(key)
+            cleaned.append(text)
+
+        if not cleaned:
+            return False, "There was nothing to add.", 0
+        if len(cleaned) > 100:
+            return False, "That is more than 100 suggestions at once.", 0
+
+        await ensure_tables()
+        async with DBContextManager(use_dict=True) as cur:
+            await cur.execute(
+                "SELECT LOWER(suggestion) AS text FROM bingo_suggestions WHERE guild_id = %s",
+                (guild_id,)
+            )
+            existing = {row["text"] for row in await cur.fetchall()}
+            fresh = [text for text in cleaned if text.lower() not in existing]
+            if not fresh:
+                return False, "Every one of those is already in the pool.", 0
+
+            # Manual rows share the batch's own synthetic ID, one step below the
+            # lowest in use, which keeps (message_id, position) unique.
+            await cur.execute("SELECT MIN(message_id) AS lowest FROM bingo_suggestions")
+            row = await cur.fetchone() or {}
+            message_id = min(0, int(row.get("lowest") or 0)) - 1
+
+            # Approving on the way in is its own review, so it is stamped as one.
+            status = "approved" if approved else "pending"
+            reviewed_at = "NOW()" if approved else "NULL"
+            for position, suggestion in enumerate(fresh, start=1):
+                await cur.execute(
+                    f"""INSERT INTO bingo_suggestions
+                        (guild_id, channel_id, message_id, discord_id, display_name,
+                         position, suggestion, status, reviewed_at, reviewed_by)
+                        VALUES (%s, 0, %s, %s, %s, %s, %s, %s, {reviewed_at}, %s)""",
+                    (guild_id, message_id, discord_id, display_name[:100], position,
+                     suggestion, status, discord_id if approved else None)
+                )
+
+        skipped = len(cleaned) - len(fresh)
+        message = f"Added {len(fresh)} suggestion{'s' if len(fresh) != 1 else ''}"
+        message += " straight into the pool." if approved else " for review."
+        if skipped:
+            message += f" {skipped} already existed and " \
+                       f"{'was' if skipped == 1 else 'were'} skipped."
+        return True, message, len(fresh)
+
     # ------------------------------------------------------------------ #
     #  Pool management                                                    #
     # ------------------------------------------------------------------ #
@@ -386,6 +468,7 @@ class BingoManager:
                           s.suggestion, s.excluded, s.used, s.used_card_id,
                           s.message_id, s.channel_id, s.created_at,
                           s.status, s.reject_category, s.reject_reason, s.reviewed_at,
+                          (s.message_id <= 0) AS manual,
                           c.name AS used_card_name
                    FROM bingo_suggestions s
                    LEFT JOIN bingo_cards c ON c.id = s.used_card_id"""
@@ -402,6 +485,7 @@ class BingoManager:
 
         for row in rows:
             row["excluded"] = bool(row["excluded"])
+            row["manual"] = bool(row["manual"])
             row["used"] = bool(row["used"])
             row["created_at"] = row["created_at"].isoformat() if row["created_at"] else None
             row["reviewed_at"] = row["reviewed_at"].isoformat() if row["reviewed_at"] else None
@@ -523,7 +607,8 @@ class BingoManager:
         placeholders = ", ".join(["%s"] * len(suggestion_ids))
         async with DBContextManager(use_dict=True) as cur:
             await cur.execute(
-                f"SELECT DISTINCT message_id FROM bingo_suggestions WHERE id IN ({placeholders})",
+                "SELECT DISTINCT message_id FROM bingo_suggestions "
+                f"WHERE message_id > 0 AND id IN ({placeholders})",
                 tuple(suggestion_ids)
             )
             message_ids = [int(r["message_id"]) for r in await cur.fetchall()]
@@ -615,10 +700,10 @@ class BingoManager:
     async def all_message_ids(guild_id: Optional[int] = None) -> list[int]:
         """Every submission message the bot has stored suggestions for."""
         await ensure_tables()
-        query = "SELECT DISTINCT message_id FROM bingo_suggestions"
+        query = "SELECT DISTINCT message_id FROM bingo_suggestions WHERE message_id > 0"
         params: tuple[Any, ...] = ()
         if guild_id:
-            query += " WHERE guild_id = %s"
+            query += " AND guild_id = %s"
             params = (guild_id,)
         query += " ORDER BY message_id"
         async with DBContextManager(use_dict=True) as cur:
@@ -635,7 +720,8 @@ class BingoManager:
         await ensure_tables()
         async with DBContextManager(use_dict=True) as cur:
             await cur.execute(
-                "SELECT DISTINCT message_id FROM bingo_suggestions WHERE guild_id = %s",
+                "SELECT DISTINCT message_id FROM bingo_suggestions "
+                "WHERE guild_id = %s AND message_id > 0",
                 (guild_id,)
             )
             known = {int(r["message_id"]) for r in await cur.fetchall()}
