@@ -762,7 +762,8 @@ class BingoManager:
     @staticmethod
     async def draw_card(rows: int, cols: int, free_space: bool = False,
                         exclude_ids: Optional[list[int]] = None,
-                        guild_id: Optional[int] = None) -> tuple[bool, str, list[dict[str, Any]]]:
+                        guild_id: Optional[int] = None,
+                        balanced: bool = False) -> tuple[bool, str, list[dict[str, Any]]]:
         """Draw a random card from the available pool without saving it.
 
         Args:
@@ -772,6 +773,10 @@ class BingoManager:
                 when both dimensions are odd, since otherwise there is no centre.
             exclude_ids: Suggestion IDs to leave out of this draw only.
             guild_id: Restrict the pool to one guild.
+            balanced: Take a turn from each person before anybody's second, so
+                as many people as possible see a square of theirs on the card.
+                Somebody who submitted ten otherwise crowds out somebody who
+                submitted one, purely by having more tickets in the draw.
 
         Returns:
             (ok, message, cells). Cells are in reading order, one per square.
@@ -807,7 +812,8 @@ class BingoManager:
                 f"{needed} and only {len(pool)} are available."
             ), []
 
-        picked = random.sample(pool, needed)
+        picked = (BingoManager._balanced_pick(pool, needed) if balanced
+                  else random.sample(pool, needed))
         cells: list[dict[str, Any]] = []
         centre = (rows * cols) // 2 if free_space else -1
         for index in range(rows * cols):
@@ -821,7 +827,48 @@ class BingoManager:
                     "display_name": row["display_name"],
                     "free": False,
                 })
-        return True, f"Drew {needed} squares from a pool of {len(pool)}.", cells
+        people = len({row["discord_id"] for row in picked})
+        return True, (
+            f"Drew {needed} squares from a pool of {len(pool)}, "
+            f"across {people} {'person' if people == 1 else 'people'}."
+        ), cells
+
+    @staticmethod
+    def _balanced_pick(pool: list[dict[str, Any]], needed: int) -> list[dict[str, Any]]:
+        """Deal the squares round the submitters, one each, until the card is full.
+
+        Everyone gets a first square before anybody gets a second, so a card
+        drawn from a pool where one person wrote thirty and ten people wrote
+        one each still has all eleven of them on it. Within that the choice is
+        still random: both the order of the people and each person's own
+        suggestions are shuffled.
+        """
+        by_person: dict[int, list[dict[str, Any]]] = {}
+        for row in pool:
+            by_person.setdefault(int(row["discord_id"]), []).append(row)
+        for suggestions in by_person.values():
+            random.shuffle(suggestions)
+
+        people = list(by_person)
+        random.shuffle(people)
+
+        picked: list[dict[str, Any]] = []
+        while len(picked) < needed:
+            dealt = False
+            for person in people:
+                if not by_person[person]:
+                    continue
+                picked.append(by_person[person].pop())
+                dealt = True
+                if len(picked) == needed:
+                    break
+            # Everybody has run dry, which the caller's size check rules out.
+            if not dealt:
+                break
+
+        # Otherwise the first square of every round would sit together.
+        random.shuffle(picked)
+        return picked
 
     @staticmethod
     async def save_card(name: str, rows: int, cols: int, free_space: bool,

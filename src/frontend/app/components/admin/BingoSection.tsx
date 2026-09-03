@@ -252,6 +252,7 @@ function CardStudio({ suggestions, onSaved, flash }: StudioProps) {
   const [freeText, setFreeText]   = useState("Booyah!");
   const [themeId, setThemeId]     = useState(CARD_THEMES[0].id);
   const [credits, setCredits]     = useState(true);
+  const [balanced, setBalanced]   = useState(true);
   const [cells, setCells]         = useState<BingoCell[] | null>(null);
   const [drawing, setDrawing]     = useState(false);
   const [saving, setSaving]       = useState(false);
@@ -309,6 +310,7 @@ function CardStudio({ suggestions, onSaved, flash }: StudioProps) {
         {
           rows, cols,
           free_space: freeSpace && oddDimensions,
+          balanced,
           guild_id: GUILD_ID || null,
         },
         { withCredentials: true },
@@ -490,6 +492,22 @@ function CardStudio({ suggestions, onSaved, flash }: StudioProps) {
               className="accent-indigo-500"
             />
             Credit each suggester on their square
+          </label>
+
+          <label className="flex items-start gap-2 text-sm text-slate-300">
+            <input
+              type="checkbox"
+              checked={balanced}
+              onChange={(e) => setBalanced(e.target.checked)}
+              className="mt-1 accent-indigo-500"
+            />
+            <span>
+              Spread across as many people as possible
+              <span className="block text-[11px] text-slate-500">
+                Everyone gets a square before anybody gets a second, so somebody
+                who sent ten doesn't crowd out somebody who sent one.
+              </span>
+            </span>
           </label>
 
           <div className={`text-xs px-3 py-2 rounded border ${
