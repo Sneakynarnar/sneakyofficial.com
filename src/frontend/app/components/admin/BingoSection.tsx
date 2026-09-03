@@ -252,7 +252,21 @@ function CardStudio({ suggestions, onSaved, flash }: StudioProps) {
   const [drawing, setDrawing]     = useState(false);
   const [saving, setSaving]       = useState(false);
 
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasRef  = useRef<HTMLCanvasElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const [previewWidth, setPreviewWidth] = useState(0);
+
+  // The preview is drawn to the width it is shown at, so the browser never has
+  // to shrink the canvas down and blur the text on the way.
+  useEffect(() => {
+    const box = previewRef.current;
+    if (!box) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setPreviewWidth(entry.contentRect.width);
+    });
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, []);
 
   const theme = CARD_THEMES.find((t) => t.id === themeId) ?? CARD_THEMES[0];
   const oddDimensions = rows % 2 === 1 && cols % 2 === 1;
@@ -269,8 +283,10 @@ function CardStudio({ suggestions, onSaved, flash }: StudioProps) {
   ), [cells, rows, cols, title, subtitle, accent, theme, credits]);
 
   useEffect(() => {
-    if (canvasRef.current && drawOptions) drawBingoCard(canvasRef.current, drawOptions);
-  }, [drawOptions]);
+    if (canvasRef.current && drawOptions && previewWidth > 0) {
+      drawBingoCard(canvasRef.current, drawOptions, previewWidth);
+    }
+  }, [drawOptions, previewWidth]);
 
   const draw = async () => {
     setDrawing(true);
@@ -434,9 +450,12 @@ function CardStudio({ suggestions, onSaved, flash }: StudioProps) {
         </div>
 
         {/* Preview */}
-        <div className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-4 flex items-center justify-center min-h-[280px]">
+        <div
+          ref={previewRef}
+          className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-4 flex items-center justify-center min-h-[280px]"
+        >
           {cells ? (
-            <canvas ref={canvasRef} className="max-w-full h-auto rounded shadow-lg" />
+            <canvas ref={canvasRef} className="rounded shadow-lg" />
           ) : (
             <p className="text-sm text-slate-500 text-center">
               Draw a card to preview it here.

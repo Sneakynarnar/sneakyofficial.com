@@ -49,10 +49,11 @@ export const CARD_THEMES: CardTheme[] = [
   },
 ];
 
-// Everything below is in layout pixels; the canvas is backed at SCALE times
-// that, so text is rasterised with enough detail to survive both the shrunken
-// on-page preview and a full size print.
-const SCALE = 2;
+// Everything below is in layout pixels. A download is backed at EXPORT_SCALE
+// times that so it holds up in print; a preview is drawn at the size it is
+// actually shown, because letting the browser shrink a huge canvas into a
+// small box is what makes the text look chewed.
+const EXPORT_SCALE = 2;
 
 const CELL_SIZE = 300;
 const PADDING = 44;
@@ -162,8 +163,19 @@ export interface DrawOptions {
   showCredits: boolean;
 }
 
-/** Draw a finished bingo card onto a canvas, sizing the canvas to fit. */
-export function drawBingoCard(canvas: HTMLCanvasElement, options: DrawOptions): void {
+/**
+ * Draw a finished bingo card onto a canvas, sizing the canvas to fit.
+ *
+ * @param displayWidth CSS pixels the canvas will occupy on the page. Given one,
+ *   the card is drawn to that size at the screen's own pixel density, so every
+ *   glyph is rasterised rather than resampled. Left out, the card is drawn at
+ *   full size for export.
+ */
+export function drawBingoCard(
+  canvas: HTMLCanvasElement,
+  options: DrawOptions,
+  displayWidth?: number,
+): void {
   const { cells, rows, cols, title, subtitle, accent, theme, showCredits } = options;
 
   const gridWidth = cols * CELL_SIZE;
@@ -171,17 +183,22 @@ export function drawBingoCard(canvas: HTMLCanvasElement, options: DrawOptions): 
   const width = gridWidth + PADDING * 2;
   const height = gridHeight + PADDING * 2 + HEADER_HEIGHT + (subtitle ? FOOTER_HEIGHT : 0);
 
-  canvas.width = width * SCALE;
-  canvas.height = height * SCALE;
-  // The preview is laid out at the design size and downscaled by the browser
-  // only when the column is narrower, so it never renders below the backing
-  // resolution.
-  canvas.style.width = `${width}px`;
+  // How much of a layout pixel one backing pixel covers.
+  const shrink = displayWidth ? Math.min(1, displayWidth / width) : 1;
+  const density = displayWidth ? Math.min(window.devicePixelRatio || 1, 2) : EXPORT_SCALE;
+  const scale = shrink * density;
+
+  canvas.width = Math.round(width * scale);
+  canvas.height = Math.round(height * scale);
+  if (displayWidth) {
+    canvas.style.width = `${Math.round(width * shrink)}px`;
+    canvas.style.height = "auto";
+  }
 
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
-  ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
   ctx.textBaseline = "top";
   ctx.fillStyle = theme.background;
   ctx.fillRect(0, 0, width, height);
