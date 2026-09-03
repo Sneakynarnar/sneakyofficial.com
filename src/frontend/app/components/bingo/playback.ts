@@ -435,6 +435,25 @@ export interface FrameOptions {
   marksOnly: boolean;
 }
 
+/**
+ * Whether anything is still moving at this point on the timeline.
+ *
+ * The live card redraws only while something is animating: a phone repainting
+ * a canvas sixty times a second to show a picture that is not changing is a
+ * good way to flatten its battery.
+ */
+export function isAnimating(timeline: Timeline, time: number): boolean {
+  if (timeline.marks.some((mark) => time - mark.at < MARK_DURATION && time >= mark.at - 50)) {
+    return true;
+  }
+  if (timeline.ticks.some((tick) => time - tick.at < 400 && time >= tick.at - 50)) return true;
+  if (timeline.lineAt !== null) {
+    const since = time - timeline.lineAt;
+    if (since > -50 && since < LINE_DURATION) return true;
+  }
+  return false;
+}
+
 /** Draw one frame of a run at a given point on its timeline. */
 export function drawFrame(
   ctx: CanvasRenderingContext2D, time: number, options: FrameOptions,
@@ -472,16 +491,32 @@ export function drawFrame(
 /*  Video                                                              */
 /* ------------------------------------------------------------------ */
 
-/** The codecs worth trying, best first. */
+// The codecs worth trying, best first. WebM is what Chrome and Firefox give
+// you and the only one that can carry transparency; Safari, including every
+// browser on iOS, records MP4 or nothing, so it is worth asking for.
 const CODECS = [
   "video/webm;codecs=vp9",
   "video/webm;codecs=vp8",
   "video/webm",
+  "video/mp4;codecs=avc1",
+  "video/mp4",
 ];
 
 export function recordingSupported(): boolean {
   return typeof MediaRecorder !== "undefined"
+    && typeof HTMLCanvasElement.prototype.captureStream === "function"
     && CODECS.some((type) => MediaRecorder.isTypeSupported(type));
+}
+
+/** Whether a recording on this browser can keep a transparent background. */
+export function transparencySupported(): boolean {
+  return typeof MediaRecorder !== "undefined"
+    && MediaRecorder.isTypeSupported("video/webm;codecs=vp9");
+}
+
+/** The file extension for whatever the recorder handed back. */
+export function extensionFor(blob: Blob): string {
+  return blob.type.includes("mp4") ? ".mp4" : ".webm";
 }
 
 export interface RecordOptions {

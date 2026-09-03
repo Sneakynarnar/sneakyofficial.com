@@ -23,8 +23,8 @@ import {
   type BingoFile, type Encoding,
 } from "../components/bingo/bingoFile";
 import {
-  buildTimeline, drawFrame, findLine, liveTimeline, markedSet, recordingSupported,
-  recordRun, squareAt,
+  buildTimeline, drawFrame, extensionFor, findLine, isAnimating, liveTimeline,
+  markedSet, recordingSupported, recordRun, squareAt, transparencySupported,
   type Counter, type Mark, type PlaybackStyle, type Tick,
 } from "../components/bingo/playback";
 
@@ -175,9 +175,15 @@ export default function BingoCardPage() {
     let frame = 0;
     const timeline = liveTimeline(session, cells, card.rows, card.cols);
 
+    let lastDrawn = -1;
     const render = () => {
       const canvas = canvasRef.current;
-      if (canvas) {
+      const now = performance.now() - startedAt.current;
+      // A still card is redrawn only when its size or styling changed, which
+      // on a phone is the difference between a warm battery and a flat one.
+      const moving = isAnimating(timeline, now);
+      if (canvas && (moving || lastDrawn < 0)) {
+        lastDrawn = now;
         const layoutHeight = geometry.height + counterHeight;
         const width = boxWidth || geometry.width;
         const density = Math.min(window.devicePixelRatio || 1, 2);
@@ -197,7 +203,7 @@ export default function BingoCardPage() {
         const ctx = canvas.getContext("2d");
         if (ctx) {
           ctx.setTransform(shrink * density, 0, 0, shrink * density, 0, 0);
-          drawFrame(ctx, performance.now() - startedAt.current, {
+          drawFrame(ctx, now, {
             base: baseRef.current, geometry, timeline, style, counterHeight, marksOnly: false,
           });
         }
@@ -249,12 +255,12 @@ export default function BingoCardPage() {
     setTicks((prev) => [...prev, { id, value, at: performance.now() - startedAt.current }]);
   };
 
-  const addCounter = () => {
-    const label = prompt("What are you counting?")?.trim();
-    if (!label) return;
+  const addCounter = (label: string) => {
+    const name = label.trim();
+    if (!name) return;
     setCounters((prev) => [
       ...prev,
-      { id: `c${Date.now().toString(36)}`, label: label.slice(0, 24), value: 0 },
+      { id: `c${Date.now().toString(36)}`, label: name.slice(0, 24), value: 0 },
     ]);
   };
 
@@ -310,7 +316,10 @@ export default function BingoCardPage() {
         size,
         onProgress: setProgress,
       });
-      setVideo({ url: URL.createObjectURL(blob), name: `${slug(title)}-run.webm` });
+      setVideo({
+        url: URL.createObjectURL(blob),
+        name: `${slug(title)}-run${extensionFor(blob)}`,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "The recording failed.");
     } finally {
@@ -357,7 +366,8 @@ export default function BingoCardPage() {
                 <canvas
                   ref={canvasRef}
                   onClick={onCanvasClick}
-                  className={`rounded-lg shadow-2xl ${finished ? "" : "cursor-pointer"}`}
+                  style={{ touchAction: "manipulation", WebkitTouchCallout: "none" }}
+                  className={`rounded-lg shadow-2xl select-none ${finished ? "" : "cursor-pointer"}`}
                 />
               </div>
 
@@ -413,7 +423,9 @@ export default function BingoCardPage() {
                   checked={marksOnly}
                   onChange={setMarksOnly}
                   label="Crosses only, no card"
-                  note="For laying over your own footage of the card. Chrome keeps the transparency; other browsers may fill it in."
+                  note={transparencySupported()
+                    ? "For laying over your own footage of the card. This browser keeps the transparency."
+                    : "For laying over your own footage. This browser can't keep the transparency, so the background comes out solid."}
                 />
 
                 <button
@@ -433,7 +445,8 @@ export default function BingoCardPage() {
                 {exporting && (
                   <p className="text-[11px] text-slate-500">
                     The recording plays out in real time, so it takes about as long as the
-                    video itself. Leave this tab in front.
+                    video itself. Leave this tab in front, and on a phone don't let the
+                    screen lock: the recording stops when the page does.
                   </p>
                 )}
                 {video && (
@@ -561,7 +574,6 @@ function DropZone({ onFile }: { onFile: (file: File) => void }) {
       <input
         ref={input}
         type="file"
-        accept={`${FILE_EXTENSION},.json,.txt`}
         className="hidden"
         onChange={(e) => { const file = e.target.files?.[0]; if (file) onFile(file); }}
       />
@@ -572,29 +584,52 @@ function DropZone({ onFile }: { onFile: (file: File) => void }) {
 function Counters({ counters, onBump, onAdd, onDrop }: {
   counters: Counter[];
   onBump: (id: string, by: number) => void;
-  onAdd: () => void;
+  onAdd: (label: string) => void;
   onDrop: (id: string) => void;
 }) {
+  const [adding, setAdding] = useState("");
+
   return (
-    <div className="flex flex-wrap items-center gap-2">
-        {counters.map((counter) => (
-          <div key={counter.id} className="flex items-center gap-1 rounded-lg bg-slate-800/70 border border-slate-700/50 px-2 py-1">
-            <span className="text-[11px] uppercase tracking-wide text-slate-400 mr-1">{counter.label}</span>
-            <button onClick={() => onBump(counter.id, -1)} className={iconButton} title="Down one">
-              <Minus className="w-3.5 h-3.5" />
-            </button>
-            <span className="text-lg font-bold text-slate-100 w-8 text-center tabular-nums">{counter.value}</span>
-            <button onClick={() => onBump(counter.id, 1)} className={iconButton} title="Up one">
-              <Plus className="w-3.5 h-3.5" />
-            </button>
-            <button onClick={() => onDrop(counter.id)} className={iconButton} title="Remove this counter">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        ))}
-      <button onClick={onAdd} className={miniButton}>
-        <Plus className="w-3.5 h-3.5" /> Add a counter
-      </button>
+    <div className="flex flex-col gap-2">
+      {counters.map((counter) => (
+        <div
+          key={counter.id}
+          className="flex items-center gap-2 rounded-lg bg-slate-800/70 border border-slate-700/50 px-2 py-1.5"
+        >
+          <span className="flex-1 min-w-0 truncate text-[11px] uppercase tracking-wide text-slate-400">
+            {counter.label}
+          </span>
+          {/* Big enough to hit with a thumb: these get tapped mid-match. */}
+          <button onClick={() => onBump(counter.id, -1)} className={counterButton} title="Down one">
+            <Minus className="w-4 h-4" />
+          </button>
+          <span className="text-lg font-bold text-slate-100 w-8 text-center tabular-nums">
+            {counter.value}
+          </span>
+          <button onClick={() => onBump(counter.id, 1)} className={counterButton} title="Up one">
+            <Plus className="w-4 h-4" />
+          </button>
+          <button onClick={() => onDrop(counter.id)} className={iconButton} title="Remove this counter">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ))}
+
+      <form
+        onSubmit={(e) => { e.preventDefault(); onAdd(adding); setAdding(""); }}
+        className="flex gap-2"
+      >
+        <input
+          value={adding}
+          onChange={(e) => setAdding(e.target.value)}
+          placeholder="Count something…"
+          maxLength={24}
+          className={inputClass}
+        />
+        <button type="submit" disabled={!adding.trim()} className={secondaryButton}>
+          <Plus className="w-4 h-4" />
+        </button>
+      </form>
     </div>
   );
 }
@@ -651,3 +686,7 @@ const miniButton =
 
 const iconButton =
   "p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-700/60 transition-colors";
+
+const counterButton =
+  "w-9 h-9 inline-flex items-center justify-center rounded-lg bg-slate-700 hover:bg-slate-600 " +
+  "text-slate-100 transition-colors";
