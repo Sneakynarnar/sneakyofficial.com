@@ -22,69 +22,37 @@ export interface CardTheme {
   id: string;
   label: string;
   background: string;
+  /** The tile a square's text sits on. */
   cell: string;
   text: string;
   muted: string;
+  /** Fill and outline for the header and the free square's lettering. */
   headerText: string;
-  /** Outline drawn round the header and FREE lettering. */
   headerOutline: string;
-  /** The ink this theme suggests for the header and the free space. */
-  accent: string;
-  /** The ink it clashes with, thrown around the card behind the squares. */
-  ink: string;
 }
 
-// Splatoon 3 issues its ink in fixed pairs, one team against the other, and
-// these are the pairs' own values from the game's files by way of Inkipedia.
-// The accent is a starting point; the admin can pick any first ink they like.
+// The theme is the paper the ink lands on; the inks themselves come from the
+// pairing chosen in INK_PAIRS, so any pairing works on either paper.
 export const CARD_THEMES: CardTheme[] = [
   {
-    id: "yellow-blue",
-    label: "Yellow vs Blue",
-    background: "#fbfbf2",
+    id: "paper",
+    label: "Paper",
+    background: "#fbfbf4",
     cell: "#ffffff",
     text: "#141327",
     muted: "#6b6a85",
     headerText: "#ffffff",
     headerOutline: "#141327",
-    accent: "#3a0ccd",
-    ink: "#d0be08",
   },
   {
-    id: "lime-purple",
-    label: "Lime vs Purple",
-    background: "#fcfdf4",
-    cell: "#ffffff",
-    text: "#1b1030",
-    muted: "#6f6489",
-    headerText: "#ffffff",
-    headerOutline: "#1b1030",
-    accent: "#6325cd",
-    ink: "#becd41",
-  },
-  {
-    id: "turquoise-pink",
-    label: "Turquoise vs Pink (night)",
+    id: "night",
+    label: "Night",
     background: "#121026",
     cell: "#1d1a38",
     text: "#f7f5ff",
     muted: "#9b95c4",
     headerText: "#121026",
     headerOutline: "#f7f5ff",
-    accent: "#1bbeab",
-    ink: "#c43a6e",
-  },
-  {
-    id: "paper",
-    label: "Plain paper",
-    background: "#ffffff",
-    cell: "#ffffff",
-    text: "#0f172a",
-    muted: "#64748b",
-    headerText: "#ffffff",
-    headerOutline: "#0f172a",
-    accent: "#6325cd",
-    ink: "#94c921",
   },
 ];
 
@@ -162,24 +130,29 @@ function hash(text: string): number {
 }
 
 interface SplatOptions {
-  /** How many lobes the blob has. Fewer reads as a bigger, lazier splat. */
+  /** How many lobes ring the body of the splat. */
   points?: number;
-  /** How far the lobes stray from the radius, 0 to 1. */
+  /** How far those lobes stray from the radius, 0 to 1. */
   wobble?: number;
-  /** Flying droplets thrown clear of the main blob. */
+  /** Flying droplets thrown clear of the splat. */
   droplets?: number;
+  /** Curling arms of ink flung off the body. */
+  arms?: number;
   /** Squash, for ink that hit at an angle. */
   squash?: number;
   rotation?: number;
 }
 
 /**
- * Trace one ink splat: a lopsided blob with a few long fingers and some
- * droplets thrown clear of it.
+ * Trace one ink splat: a round body, fat lobes bulging off it, a couple of
+ * arms curling away and some droplets thrown clear.
  *
- * The fingers are what sell it. A blob with evenly wobbled edges reads as a
- * cloud, whereas ink that has hit something spikes out in a couple of places
- * and leaves flecks around itself.
+ * The whole thing is one path filled in a single pass. Circles laid over each
+ * other in the same winding direction merge into one outline, which is what
+ * gives the curling, bulbous edge the game's ink has, and it means the shape
+ * can be painted at less than full opacity without seams showing where the
+ * pieces overlap. Drawing the outline point by point instead gives you
+ * triangular spikes, which is what ink emphatically does not look like.
  */
 function splat(
   ctx: CanvasRenderingContext2D,
@@ -188,7 +161,7 @@ function splat(
   options: SplatOptions = {},
 ): void {
   const {
-    points = 11, wobble = 0.55, droplets = 5,
+    points = 7, wobble = 0.4, droplets = 3, arms = 2,
     squash = 1, rotation = rng() * TAU,
   } = options;
 
@@ -196,54 +169,53 @@ function splat(
   ctx.translate(cx, cy);
   ctx.rotate(rotation);
   ctx.scale(1, squash);
+  ctx.beginPath();
 
-  // Evenly spaced lobes of similar length read as a cloud. Ink that has hit
-  // something has its lobes bunched unevenly and throws two or three long
-  // fingers, so both the angles and the lengths are knocked about.
-  const lobes: { angle: number; radius: number }[] = [];
-  const step = TAU / points;
-  for (let i = 0; i < points; i += 1) {
-    const finger = rng() < 0.34 ? 1.3 + rng() * 0.6 : 1;
-    lobes.push({
-      angle: i * step + (rng() - 0.5) * step * 0.9,
-      radius: radius * (1 - wobble / 2 + rng() * wobble) * finger,
-    });
-  }
-
-  // Curve through the midpoints between neighbours: the lobe tips become
-  // control points, which rounds the blob off without flattening the fingers.
-  const at = (i: number) => {
-    const lobe = lobes[((i % points) + points) % points];
-    return { x: Math.cos(lobe.angle) * lobe.radius, y: Math.sin(lobe.angle) * lobe.radius };
+  const blob = (x: number, y: number, r: number) => {
+    ctx.moveTo(x + r, y);
+    ctx.arc(x, y, r, 0, TAU);
   };
 
-  ctx.beginPath();
-  const first = at(0);
-  const last = at(points - 1);
-  ctx.moveTo((last.x + first.x) / 2, (last.y + first.y) / 2);
+  // The body, then lobes bulging out of it at uneven angles.
+  blob(0, 0, radius * 0.62);
+  const step = TAU / points;
   for (let i = 0; i < points; i += 1) {
-    const current = at(i);
-    const next = at(i + 1);
-    ctx.quadraticCurveTo(
-      current.x, current.y,
-      (current.x + next.x) / 2, (current.y + next.y) / 2,
-    );
+    const angle = i * step + (rng() - 0.5) * step * 0.8;
+    const reach = radius * (0.42 + rng() * wobble);
+    blob(Math.cos(angle) * reach, Math.sin(angle) * reach,
+         radius * (0.3 + rng() * 0.22));
   }
-  ctx.closePath();
-  ctx.fill();
 
+  // Arms: a chain of shrinking blobs walking outwards while it turns, which is
+  // what makes the ink curl rather than point.
+  for (let i = 0; i < arms; i += 1) {
+    let angle = rng() * TAU;
+    const turn = (rng() - 0.5) * 0.9;
+    let distance = radius * 0.6;
+    let size = radius * (0.2 + rng() * 0.12);
+    const links = 3 + Math.floor(rng() * 3);
+    for (let link = 0; link < links; link += 1) {
+      distance += size * 1.35;
+      angle += turn;
+      size *= 0.72 + rng() * 0.12;
+      blob(Math.cos(angle) * distance, Math.sin(angle) * distance, size);
+    }
+  }
+
+  // Droplets are stretched along the line they flew out on, so they read as
+  // thrown ink rather than as spots.
   for (let i = 0; i < droplets; i += 1) {
     const angle = rng() * TAU;
-    const distance = radius * (1.05 + rng() * 0.85);
-    const size = radius * (0.04 + rng() * 0.11);
-    ctx.beginPath();
+    const distance = radius * (1.02 + rng() * 0.55);
+    const size = radius * (0.045 + rng() * 0.075);
+    ctx.moveTo(Math.cos(angle) * distance + size, Math.sin(angle) * distance);
     ctx.ellipse(
       Math.cos(angle) * distance, Math.sin(angle) * distance,
-      size, size * (0.6 + rng() * 0.6), angle, 0, TAU,
+      size * (1 + rng() * 0.5), size, angle, 0, TAU,
     );
-    ctx.fill();
   }
 
+  ctx.fill();
   ctx.restore();
 }
 
@@ -385,8 +357,13 @@ function fitText(
   maxFont: number,
   minFont: number,
 ): WrappedText {
+  const words = text.split(/\s+/).filter(Boolean);
   for (let size = maxFont; size >= minFont; size -= 1) {
     ctx.font = `${weight} ${size}px ${font}`;
+    // A word too wide for the box would be broken mid-word, which looks like a
+    // mistake. Shrinking until it fits is what a human would do instead, so a
+    // size is only accepted once every word fits on a line of its own.
+    if (words.some((word) => ctx.measureText(word).width > maxWidth)) continue;
     const lines = wrap(ctx, text, maxWidth);
     if (lines.length * size * 1.24 <= maxHeight) return { lines, fontSize: size };
   }
@@ -432,7 +409,12 @@ export interface DrawOptions {
   cols: number;
   title: string;
   subtitle: string;
+  /** The first ink: the header band and the free square. */
   accent: string;
+  /** The ink it clashes with, alternating with it across the grid. */
+  secondary: string;
+  /** What the free square says. Splatoon's own answer is "Booyah!". */
+  freeText: string;
   theme: CardTheme;
   showCredits: boolean;
 }
@@ -450,7 +432,9 @@ export function drawBingoCard(
   options: DrawOptions,
   displayWidth?: number,
 ): void {
-  const { cells, rows, cols, title, subtitle, accent, theme, showCredits } = options;
+  const {
+    cells, rows, cols, title, subtitle, accent, secondary, freeText, theme, showCredits,
+  } = options;
 
   const gridWidth = cols * CELL_SIZE;
   const gridHeight = rows * CELL_SIZE;
@@ -478,7 +462,7 @@ export function drawBingoCard(
   ctx.fillRect(0, 0, width, height);
 
   const gridTop = PADDING + HEADER_HEIGHT;
-  const inks = [accent, theme.ink];
+  const inks = [accent, secondary];
 
   // Ink under everything: big lazy splats in both team colours, faint enough
   // that the squares still read, seeded on the card so it never reshuffles.
@@ -488,7 +472,7 @@ export function drawBingoCard(
       ctx, inks[i % 2], inkAlpha(inks[i % 2], theme.background, 0.14),
       backdrop() * width, backdrop() * height,
       CELL_SIZE * (0.3 + backdrop() * 0.55), backdrop,
-      { points: 10, wobble: 0.7, droplets: 8, squash: 0.55 + backdrop() * 0.7 },
+      { points: 9, wobble: 0.7, droplets: 3, arms: 3, squash: 0.55 + backdrop() * 0.7 },
     );
   }
   // Two roller sweeps across the paper, because a turf war is not all splats.
@@ -498,7 +482,7 @@ export function drawBingoCard(
       backdrop() * width, PADDING + backdrop() * (height - PADDING),
       CELL_SIZE * (0.9 + backdrop() * 0.5), backdrop,
       {
-        points: 13, wobble: 0.35, droplets: 10,
+        points: 11, wobble: 0.35, droplets: 2, arms: 1,
         squash: 0.16 + backdrop() * 0.1,
         rotation: (backdrop() - 0.5) * 1.2,
       },
@@ -512,7 +496,7 @@ export function drawBingoCard(
   ctx.save();
   ctx.fillStyle = accent;
   splat(ctx, bandCentre.x, bandCentre.y, gridWidth / 2, band, {
-    points: 21, wobble: 0.5, droplets: 12,
+    points: 23, wobble: 0.5, droplets: 5, arms: 4,
     squash: (bandHeight / gridWidth) * 1.85, rotation: 0,
   });
   // Ink running off the underside of the band, towards the grid.
@@ -569,7 +553,7 @@ export function drawBingoCard(
     ctx.save();
     ctx.fillStyle = free ? accent : inks[(row + col) % 2];
     splat(ctx, centreX, centreY, CELL_SIZE * (free ? 0.5 : 0.46), rng, {
-      points: 13, wobble: 0.42, droplets: 6,
+      points: 9, wobble: 0.42, droplets: 3, arms: 2,
     });
     ctx.restore();
   });
@@ -585,8 +569,9 @@ export function drawBingoCard(
     const boxHeight = CELL_SIZE - CELL_PADDING * 2 - TILE_INSET * 2 - creditSpace;
 
     const body = isFree
-      ? fitText(ctx, "FREE", CELL_SIZE - CELL_PADDING * 2, CELL_SIZE - CELL_PADDING * 2,
-                DISPLAY_FONT, "400", 82, 40)
+      ? fitText(ctx, freeText.trim() || "FREE",
+                CELL_SIZE - CELL_PADDING * 2, CELL_SIZE - CELL_PADDING * 2,
+                DISPLAY_FONT, "400", 82, 28)
       : fitText(ctx, cell.text, boxWidth, boxHeight, BODY_FONT, "600", 34, 17);
 
     ctx.save();

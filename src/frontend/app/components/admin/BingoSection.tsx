@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import {
-  Check, Dices, Download, EyeOff, Grid3x3, Loader2, Pencil, Plus, RefreshCw,
-  Save, Search, ThumbsDown, ThumbsUp, Trash2, Undo2, X,
+  ArrowLeftRight, Check, Dices, Download, EyeOff, Grid3x3, Loader2, Pencil, Plus,
+  RefreshCw, Save, Search, ThumbsDown, ThumbsUp, Trash2, Undo2, X,
 } from "lucide-react";
 import {
   CARD_THEMES, cardToPngBlob, drawBingoCard, ensureCardFonts,
   type BingoCell, type DrawOptions,
 } from "./bingoCanvas";
+import { DEFAULT_PAIR, INK_PAIRS, inkPairsByGame } from "./inkPairs";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
 const GUILD_ID = import.meta.env.VITE_GUILD_ID ?? "";
@@ -245,7 +246,10 @@ function CardStudio({ suggestions, onSaved, flash }: StudioProps) {
   const [freeSpace, setFreeSpace] = useState(true);
   const [title, setTitle]         = useState("Splatoon Bingo");
   const [subtitle, setSubtitle]   = useState("");
-  const [accent, setAccent]       = useState(CARD_THEMES[0].accent);
+  const [pairId, setPairId]       = useState(DEFAULT_PAIR.id);
+  const [accent, setAccent]       = useState(DEFAULT_PAIR.a);
+  const [secondary, setSecondary] = useState(DEFAULT_PAIR.b);
+  const [freeText, setFreeText]   = useState("Booyah!");
   const [themeId, setThemeId]     = useState(CARD_THEMES[0].id);
   const [credits, setCredits]     = useState(true);
   const [cells, setCells]         = useState<BingoCell[] | null>(null);
@@ -279,8 +283,11 @@ function CardStudio({ suggestions, onSaved, flash }: StudioProps) {
   }, [oddDimensions, freeSpace]);
 
   const drawOptions: DrawOptions | null = useMemo(() => (
-    cells ? { cells, rows, cols, title, subtitle, accent, theme, showCredits: credits } : null
-  ), [cells, rows, cols, title, subtitle, accent, theme, credits]);
+    cells
+      ? { cells, rows, cols, title, subtitle, accent, secondary, freeText, theme,
+          showCredits: credits }
+      : null
+  ), [cells, rows, cols, title, subtitle, accent, secondary, freeText, theme, credits]);
 
   useEffect(() => {
     let live = true;
@@ -341,7 +348,8 @@ function CardStudio({ suggestions, onSaved, flash }: StudioProps) {
         {
           name: title, rows, cols,
           free_space: freeSpace && oddDimensions,
-          cells,
+          cells: cells.map((cell) =>
+            cell.free ? { ...cell, text: freeText.trim() || "FREE" } : cell),
         },
         { withCredentials: true },
       );
@@ -394,27 +402,59 @@ function CardStudio({ suggestions, onSaved, flash }: StudioProps) {
             />
           </Field>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Theme">
-              <select
-                value={themeId}
-                onChange={(e) => {
-                  setThemeId(e.target.value);
-                  const picked = CARD_THEMES.find((t) => t.id === e.target.value);
-                  if (picked) setAccent(picked.accent);
-                }}
-                className={inputClass}
-              >
-                {CARD_THEMES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-              </select>
-            </Field>
-            <Field label="Accent">
+          <Field label="Ink">
+            <select
+              value={pairId}
+              onChange={(e) => {
+                setPairId(e.target.value);
+                const picked = INK_PAIRS.find((p) => p.id === e.target.value);
+                if (picked) { setAccent(picked.a); setSecondary(picked.b); }
+              }}
+              className={inputClass}
+            >
+              {inkPairsByGame().map((group) => (
+                <optgroup key={group.game} label={group.game}>
+                  {group.pairs.map((p) => (
+                    <option key={p.id} value={p.id}>{p.label}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </Field>
+
+          <div className="flex items-end gap-2">
+            <Field label="First ink">
               <input
                 type="color"
                 value={accent}
                 onChange={(e) => setAccent(e.target.value)}
-                className="w-full h-[38px] rounded-lg bg-slate-900/60 border border-slate-700 cursor-pointer"
+                className={swatchClass}
               />
+            </Field>
+            <button
+              type="button"
+              title="Swap the two inks"
+              onClick={() => { setAccent(secondary); setSecondary(accent); }}
+              className={`${miniButton} mb-[7px]`}
+            >
+              <ArrowLeftRight className="w-3.5 h-3.5" />
+            </button>
+            <Field label="Second ink">
+              <input
+                type="color"
+                value={secondary}
+                onChange={(e) => setSecondary(e.target.value)}
+                className={swatchClass}
+              />
+            </Field>
+            <Field label="Paper">
+              <select
+                value={themeId}
+                onChange={(e) => setThemeId(e.target.value)}
+                className={inputClass}
+              >
+                {CARD_THEMES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+              </select>
             </Field>
           </div>
 
@@ -429,6 +469,18 @@ function CardStudio({ suggestions, onSaved, flash }: StudioProps) {
             Free space in the middle
             {!oddDimensions && <span className="text-[11px] text-slate-600">(needs odd rows and columns)</span>}
           </label>
+
+          {freeSpace && oddDimensions && (
+            <Field label="Free square says">
+              <input
+                value={freeText}
+                onChange={(e) => setFreeText(e.target.value)}
+                placeholder="FREE"
+                className={inputClass}
+                maxLength={24}
+              />
+            </Field>
+          )}
 
           <label className="flex items-center gap-2 text-sm text-slate-300">
             <input
@@ -920,7 +972,10 @@ function SavedCards({ cards, onChanged, flash }: {
       cols: card.card_cols,
       title: card.name,
       subtitle: "",
-      accent: CARD_THEMES[0].accent,
+      accent: DEFAULT_PAIR.a,
+      secondary: DEFAULT_PAIR.b,
+      // Whatever the free square said when the card was saved.
+      freeText: card.cells.find((cell) => cell.free)?.text ?? "FREE",
       theme: CARD_THEMES[0],
       showCredits: true,
     });
@@ -980,6 +1035,9 @@ function SavedCards({ cards, onChanged, flash }: {
 const inputClass =
   "w-full px-3 py-2 rounded-lg bg-slate-900/60 border border-slate-700 text-sm text-slate-200 " +
   "placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors";
+
+const swatchClass =
+  "w-full h-[38px] rounded-lg bg-slate-900/60 border border-slate-700 cursor-pointer";
 
 const primaryButton =
   "inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 " +
