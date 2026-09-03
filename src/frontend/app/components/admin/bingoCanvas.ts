@@ -35,16 +35,6 @@ export interface CardTheme {
 // pairing chosen in INK_PAIRS, so any pairing works on either paper.
 export const CARD_THEMES: CardTheme[] = [
   {
-    id: "paper",
-    label: "Paper",
-    background: "#fbfbf4",
-    cell: "#ffffff",
-    text: "#141327",
-    muted: "#6b6a85",
-    headerText: "#ffffff",
-    headerOutline: "#141327",
-  },
-  {
     id: "night",
     label: "Night",
     background: "#121026",
@@ -53,6 +43,16 @@ export const CARD_THEMES: CardTheme[] = [
     muted: "#9b95c4",
     headerText: "#121026",
     headerOutline: "#f7f5ff",
+  },
+  {
+    id: "paper",
+    label: "Paper (for printing)",
+    background: "#fbfbf4",
+    cell: "#ffffff",
+    text: "#141327",
+    muted: "#6b6a85",
+    headerText: "#ffffff",
+    headerOutline: "#141327",
   },
 ];
 
