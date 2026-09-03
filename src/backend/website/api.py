@@ -1556,7 +1556,8 @@ class SneakyApi:
                 free_space=bool(body.get("free_space", False)),
                 exclude_ids=[int(i) for i in body.get("exclude_ids", [])],
                 guild_id=int(guild_id) if guild_id else None,
-                balanced=bool(body.get("balanced", False)),
+                balance=float(body.get("balance", 1)),
+                include_ids=[int(i) for i in body.get("include_ids", [])],
             )
             return web.json_response(
                 {"ok": ok, "message": msg, "cells": cells}, status=200 if ok else 400

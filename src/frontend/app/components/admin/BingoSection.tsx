@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import {
-  ArrowLeftRight, Check, Dices, Download, EyeOff, Grid3x3, Loader2, Pencil, Plus,
-  RefreshCw, Save, Search, ThumbsDown, ThumbsUp, Trash2, Undo2, X,
+  ArrowLeftRight, Check, Dices, Download, EyeOff, Grid3x3, Loader2, Pencil, Pin,
+  Plus, RefreshCw, Save, Search, ThumbsDown, ThumbsUp, Trash2, Undo2, X,
 } from "lucide-react";
 import {
   CARD_THEMES, cardToPngBlob, drawBingoCard, ensureCardFonts,
@@ -85,6 +85,7 @@ export default function BingoSection() {
   const [cards, setCards]             = useState<SavedCard[]>([]);
   const [stats, setStats]             = useState<Stats | null>(null);
   const [categories, setCategories]   = useState<RejectCategory[]>([]);
+  const [pinned, setPinned]           = useState<number[]>([]);
   const [loading, setLoading]         = useState(true);
   const [msg, setMsg]                 = useState<{ text: string; ok: boolean } | null>(null);
 
@@ -134,11 +135,19 @@ export default function BingoSection() {
 
       <ResyncBar onDone={load} flash={flash} />
 
-      <CardStudio suggestions={suggestions} onSaved={load} flash={flash} />
+      <CardStudio
+        suggestions={suggestions}
+        pinned={pinned}
+        onUnpin={(id) => setPinned((prev) => prev.filter((p) => p !== id))}
+        onSaved={load}
+        flash={flash}
+      />
 
       <SuggestionPool
         suggestions={suggestions}
         categories={categories}
+        pinned={pinned}
+        onPin={(ids) => setPinned((prev) => [...new Set([...prev, ...ids])])}
         onChanged={load}
         flash={flash}
       />
@@ -236,11 +245,14 @@ function ResyncBar({ onDone, flash }: { onDone: () => void; flash: (t: string, o
 
 interface StudioProps {
   suggestions: Suggestion[];
+  /** Suggestion IDs the admin has picked out to go on the next card. */
+  pinned: number[];
+  onUnpin: (id: number) => void;
   onSaved: () => void;
   flash: (text: string, ok: boolean) => void;
 }
 
-function CardStudio({ suggestions, onSaved, flash }: StudioProps) {
+function CardStudio({ suggestions, pinned, onUnpin, onSaved, flash }: StudioProps) {
   const [rows, setRows]           = useState(5);
   const [cols, setCols]           = useState(5);
   const [freeSpace, setFreeSpace] = useState(true);
@@ -252,7 +264,7 @@ function CardStudio({ suggestions, onSaved, flash }: StudioProps) {
   const [freeText, setFreeText]   = useState("Booyah!");
   const [themeId, setThemeId]     = useState(CARD_THEMES[0].id);
   const [credits, setCredits]     = useState(true);
-  const [balanced, setBalanced]   = useState(true);
+  const [balance, setBalance]     = useState(100);
   const [cells, setCells]         = useState<BingoCell[] | null>(null);
   const [drawing, setDrawing]     = useState(false);
   const [saving, setSaving]       = useState(false);
@@ -310,7 +322,8 @@ function CardStudio({ suggestions, onSaved, flash }: StudioProps) {
         {
           rows, cols,
           free_space: freeSpace && oddDimensions,
-          balanced,
+          balance: balance / 100,
+          include_ids: pinned,
           guild_id: GUILD_ID || null,
         },
         { withCredentials: true },
@@ -356,7 +369,11 @@ function CardStudio({ suggestions, onSaved, flash }: StudioProps) {
         { withCredentials: true },
       );
       flash(data.message ?? (data.ok ? "Card saved." : "Couldn't save."), data.ok);
-      if (data.ok) { setCells(null); onSaved(); }
+      if (data.ok) {
+        setCells(null);
+        pinned.forEach(onUnpin);
+        onSaved();
+      }
     } catch {
       flash("Couldn't save the card.", false);
     } finally {
@@ -494,21 +511,28 @@ function CardStudio({ suggestions, onSaved, flash }: StudioProps) {
             Credit each suggester on their square
           </label>
 
-          <label className="flex items-start gap-2 text-sm text-slate-300">
+          <Field label={`Spread across people — ${balance}%`}>
             <input
-              type="checkbox"
-              checked={balanced}
-              onChange={(e) => setBalanced(e.target.checked)}
-              className="mt-1 accent-indigo-500"
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={balance}
+              onChange={(e) => setBalance(Number(e.target.value))}
+              className="w-full accent-indigo-500 cursor-pointer"
             />
-            <span>
-              Spread across as many people as possible
-              <span className="block text-[11px] text-slate-500">
-                Everyone gets a square before anybody gets a second, so somebody
-                who sent ten doesn't crowd out somebody who sent one.
-              </span>
-            </span>
-          </label>
+            <div className="flex justify-between text-[11px] text-slate-500">
+              <span>Pure luck</span>
+              <span>Everyone gets one</span>
+            </div>
+            <p className="text-[11px] text-slate-500">
+              At nothing, somebody who sent ten suggestions has ten times the
+              chance of somebody who sent one. All the way up, the draw insists
+              on giving everybody a square before it gives anybody a second.
+            </p>
+          </Field>
+
+          <PinnedSquares suggestions={suggestions} pinned={pinned} onUnpin={onUnpin} needed={needed} />
 
           <div className={`text-xs px-3 py-2 rounded border ${
             available >= needed
@@ -551,6 +575,43 @@ function CardStudio({ suggestions, onSaved, flash }: StudioProps) {
   );
 }
 
+/** The squares picked by hand, listed so they can be dropped again. */
+function PinnedSquares({ suggestions, pinned, onUnpin, needed }: {
+  suggestions: Suggestion[];
+  pinned: number[];
+  onUnpin: (id: number) => void;
+  needed: number;
+}) {
+  if (pinned.length === 0) return null;
+
+  const rows = pinned
+    .map((id) => suggestions.find((s) => s.id === id))
+    .filter((s): s is Suggestion => Boolean(s));
+
+  return (
+    <div className={`text-xs px-3 py-2 rounded border ${
+      pinned.length > needed
+        ? "bg-amber-900/30 text-amber-300 border-amber-700/40"
+        : "bg-slate-900/40 text-slate-400 border-slate-700/50"}`}>
+      <p className="mb-1.5">
+        <strong>{pinned.length}</strong> square{pinned.length === 1 ? "" : "s"} picked
+        by hand{pinned.length > needed ? `, which is more than the ${needed} this card holds` : ""}.
+        The rest is drawn around them.
+      </p>
+      <ul className="flex flex-wrap gap-1.5">
+        {rows.map((s) => (
+          <li key={s.id} className="flex items-center gap-1 px-2 py-1 rounded bg-slate-800/80 text-slate-300">
+            <span className="max-w-[220px] truncate">{s.suggestion}</span>
+            <button onClick={() => onUnpin(s.id)} title="Drop this one" className="text-slate-500 hover:text-slate-200">
+              <X className="w-3 h-3" />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /*  Suggestion pool                                                    */
 /* ------------------------------------------------------------------ */
@@ -558,11 +619,13 @@ function CardStudio({ suggestions, onSaved, flash }: StudioProps) {
 interface PoolProps {
   suggestions: Suggestion[];
   categories: RejectCategory[];
+  pinned: number[];
+  onPin: (ids: number[]) => void;
   onChanged: () => void;
   flash: (text: string, ok: boolean) => void;
 }
 
-function SuggestionPool({ suggestions, categories, onChanged, flash }: PoolProps) {
+function SuggestionPool({ suggestions, categories, pinned, onPin, onChanged, flash }: PoolProps) {
   const [filter, setFilter]     = useState<Filter>("available");
   const [query, setQuery]       = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -654,6 +717,16 @@ function SuggestionPool({ suggestions, categories, onChanged, flash }: PoolProps
             className={`${miniButton} !text-emerald-300 hover:!bg-emerald-900/40`}
           >
             <ThumbsUp className="w-3.5 h-3.5" /> Approve
+          </button>
+          <button
+            onClick={() => { onPin(ids.filter((id) => {
+              const found = suggestions.find((s) => s.id === id);
+              return found && isReady(found);
+            })); setSelected(new Set()); }}
+            className={`${miniButton} !text-indigo-300 hover:!bg-indigo-900/40`}
+            title="Put these on the next card you draw"
+          >
+            <Pin className="w-3.5 h-3.5" /> Put on next card
           </button>
           <button disabled={busy} onClick={() => { setRejecting(ids); setCategory(""); setReason(""); }} className={`${miniButton} !text-red-300 hover:!bg-red-900/40`}>
             <ThumbsDown className="w-3.5 h-3.5" /> Decline
@@ -839,6 +912,18 @@ function SuggestionPool({ suggestions, categories, onChanged, flash }: PoolProps
                       onClick={() => { setRejecting([s.id]); setCategory(""); setReason(""); }}
                     >
                       <ThumbsDown className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {isReady(s) && (
+                    <button
+                      title={pinned.includes(s.id)
+                        ? "Already going on the next card"
+                        : "Put this on the next card you draw"}
+                      className={`${iconButton} ${pinned.includes(s.id) ? "!text-indigo-300" : ""}`}
+                      disabled={pinned.includes(s.id)}
+                      onClick={() => onPin([s.id])}
+                    >
+                      <Pin className="w-3.5 h-3.5" />
                     </button>
                   )}
                   <button

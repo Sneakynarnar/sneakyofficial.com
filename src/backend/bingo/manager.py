@@ -763,7 +763,9 @@ class BingoManager:
     async def draw_card(rows: int, cols: int, free_space: bool = False,
                         exclude_ids: Optional[list[int]] = None,
                         guild_id: Optional[int] = None,
-                        balanced: bool = False) -> tuple[bool, str, list[dict[str, Any]]]:
+                        balance: float = 1.0,
+                        include_ids: Optional[list[int]] = None,
+                        ) -> tuple[bool, str, list[dict[str, Any]]]:
         """Draw a random card from the available pool without saving it.
 
         Args:
@@ -773,10 +775,13 @@ class BingoManager:
                 when both dimensions are odd, since otherwise there is no centre.
             exclude_ids: Suggestion IDs to leave out of this draw only.
             guild_id: Restrict the pool to one guild.
-            balanced: Take a turn from each person before anybody's second, so
-                as many people as possible see a square of theirs on the card.
-                Somebody who submitted ten otherwise crowds out somebody who
-                submitted one, purely by having more tickets in the draw.
+            balance: How hard to even the card out between submitters, 0 to 1.
+                At 0 every suggestion is as likely as every other, so somebody
+                who sent ten has ten times the chance of somebody who sent one.
+                At 1 the draw all but insists on giving everybody a square
+                before it gives anybody a second. In between it leans.
+            include_ids: Suggestions to put on the card outright, before any of
+                it is drawn. They still have to be in the available pool.
 
         Returns:
             (ok, message, cells). Cells are in reading order, one per square.
@@ -787,6 +792,12 @@ class BingoManager:
             return False, "A free space needs both dimensions to be odd.", []
 
         needed = rows * cols - (1 if free_space else 0)
+        wanted = list(dict.fromkeys(include_ids or []))
+        if len(wanted) > needed:
+            return False, (
+                f"You've picked {len(wanted)} squares by hand and this card only "
+                f"has room for {needed}."
+            ), []
 
         where = ["status = 'approved'", "excluded = 0", "used = 0"]
         params: list[Any] = []
@@ -812,62 +823,87 @@ class BingoManager:
                 f"{needed} and only {len(pool)} are available."
             ), []
 
-        picked = (BingoManager._balanced_pick(pool, needed) if balanced
-                  else random.sample(pool, needed))
+        by_id = {int(row["id"]): row for row in pool}
+        missing = [i for i in wanted if i not in by_id]
+        if missing:
+            return False, (
+                f"{len(missing)} of the squares you picked by hand "
+                f"{'is' if len(missing) == 1 else 'are'} no longer available. "
+                "Reload the page and pick again."
+            ), []
+
+        chosen = [by_id[i] for i in wanted]
+        picked_ids = set(wanted)
+        rest = [row for row in pool if int(row["id"]) not in picked_ids]
+        chosen += BingoManager._weighted_pick(rest, needed - len(chosen), balance)
+        people = len({int(row["discord_id"]) for row in chosen})
+        random.shuffle(chosen)
+
         cells: list[dict[str, Any]] = []
         centre = (rows * cols) // 2 if free_space else -1
         for index in range(rows * cols):
             if index == centre:
                 cells.append({"id": None, "text": "FREE", "display_name": None, "free": True})
             else:
-                row = picked.pop()
+                row = chosen.pop()
                 cells.append({
                     "id": row["id"],
                     "text": row["suggestion"],
                     "display_name": row["display_name"],
                     "free": False,
                 })
-        people = len({row["discord_id"] for row in picked})
         return True, (
             f"Drew {needed} squares from a pool of {len(pool)}, "
             f"across {people} {'person' if people == 1 else 'people'}."
         ), cells
 
-    @staticmethod
-    def _balanced_pick(pool: list[dict[str, Any]], needed: int) -> list[dict[str, Any]]:
-        """Deal the squares round the submitters, one each, until the card is full.
+    # How much longer the odds on a second square for the same person get, once
+    # the balance is turned all the way up. High enough that everybody is served
+    # before anybody is served twice, short of the pool running out.
+    _BALANCE_STRENGTH = 40.0
 
-        Everyone gets a first square before anybody gets a second, so a card
-        drawn from a pool where one person wrote thirty and ten people wrote
-        one each still has all eleven of them on it. Within that the choice is
-        still random: both the order of the people and each person's own
-        suggestions are shuffled.
+    @staticmethod
+    def _weighted_pick(pool: list[dict[str, Any]], needed: int,
+                       balance: float) -> list[dict[str, Any]]:
+        """Draw squares, leaning on the submitters as evenly as asked.
+
+        Each person's chance of the next square is their remaining suggestions
+        raised to ``1 - balance``, over the strength raised to ``balance`` for
+        each square they already hold. At 0 that is a straight draw across
+        every suggestion; at 1 the count stops mattering and a second square
+        costs somebody forty times the odds of their first. The dial in between
+        is a real blend of the two rather than a switch between them.
         """
+        if needed <= 0:
+            return []
+        # The effect is front-loaded: a fifth of the way up the dial and the
+        # crowding is already mostly gone. Squaring it puts the interesting
+        # part in the middle of the slider, where somebody dragging it looks
+        # for it.
+        lean = min(1.0, max(0.0, balance)) ** 2
+
         by_person: dict[int, list[dict[str, Any]]] = {}
         for row in pool:
             by_person.setdefault(int(row["discord_id"]), []).append(row)
         for suggestions in by_person.values():
             random.shuffle(suggestions)
 
-        people = list(by_person)
-        random.shuffle(people)
-
+        taken: dict[int, int] = {person: 0 for person in by_person}
         picked: list[dict[str, Any]] = []
-        while len(picked) < needed:
-            dealt = False
-            for person in people:
-                if not by_person[person]:
-                    continue
-                picked.append(by_person[person].pop())
-                dealt = True
-                if len(picked) == needed:
-                    break
-            # Everybody has run dry, which the caller's size check rules out.
-            if not dealt:
-                break
 
-        # Otherwise the first square of every round would sit together.
-        random.shuffle(picked)
+        while len(picked) < needed:
+            people = [person for person, left in by_person.items() if left]
+            if not people:
+                break
+            weights = [
+                len(by_person[person]) ** (1 - lean)
+                / BingoManager._BALANCE_STRENGTH ** (lean * taken[person])
+                for person in people
+            ]
+            person = random.choices(people, weights=weights, k=1)[0]
+            picked.append(by_person[person].pop())
+            taken[person] += 1
+
         return picked
 
     @staticmethod
